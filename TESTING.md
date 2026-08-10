@@ -310,8 +310,12 @@ racy.
   had no Android device/emulator session available (see BUILD.md). The
   Dart-side `SafBridge` was written against the documented `MethodChannel`
   contract but is unverified end-to-end.
-- **macOS `TrashChannel.swift`** - no macOS host was available to compile
-  or exercise it.
+- **macOS `TrashChannel.swift`** - now confirmed to compile successfully
+  on a real `macos-latest` GitHub Actions runner (`.github/workflows/
+  release.yml`, run 31437939750, after fixing its Xcode-project
+  registration - see BUILD.md). Still not exercised at runtime: no macOS
+  host was available in any of this project's build sessions to actually
+  launch the app or invoke the Trash channel.
 - **Windows is no longer in this list.** An earlier draft of this document
   said the Windows release build and its runtime behavior were unverified;
   that's since been resolved - see BUILD.md and the integration-test

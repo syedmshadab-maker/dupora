@@ -240,10 +240,18 @@ lipo -create -output rust/target/release/libdupora_engine_universal.dylib \
 flutter build macos --release
 ```
 
-`macos/Runner/TrashChannel.swift` needs to be part of the Xcode project
-target (added via `macos/Runner.xcodeproj` if not auto-picked-up) for the
-Trash `MethodChannel` to register. **Not built or run in this session -
-no macOS hardware was available.**
+**Compiles successfully on a real `macos-latest` GitHub Actions runner**
+(verified via `.github/workflows/release.yml`, run 31437939750, after
+fixing `macos/Runner.xcodeproj/project.pbxproj` to actually register
+`macos/Runner/TrashChannel.swift` in the Runner target's build phase - it
+existed in the repo but Xcode was silently never compiling it, which
+`flutter build macos --release` caught immediately as `error: cannot find
+'TrashChannel' in scope`). This is **build verification only**: no macOS
+hardware exists in this project's build sessions, so the Trash
+`MethodChannel` itself, and the app generally, have never been launched or
+exercised at runtime on macOS. It also isn't attached to GitHub Releases
+yet - see "Automated GitHub Releases" below for why (the native engine
+library isn't bundled into the packaged `.app` for this platform).
 
 ## Linux
 
@@ -325,32 +333,25 @@ version consistent.
 - **macOS and Linux are built on GitHub-hosted runners as a compile-health
   check only** (`continue-on-error: true`, so a failure here never blocks
   the Windows/Android release) and their output is deliberately *not*
-  attached to the release. Verified for real via a `workflow_dispatch` run
-  on 2026-08-11 (GitHub Actions run 31434128772):
-  - **Linux actually compiles successfully** on `ubuntu-latest`. It's
-    still not attached, because unlike `windows/CMakeLists.txt` (which has
-    an explicit `install(FILES ...)` rule bundling `dupora_engine.dll`
-    next to `Runner.exe`), `linux/CMakeLists.txt` has no equivalent step
-    bundling `libdupora_engine.so` into the packaged bundle - the compiled
-    app would fail at runtime the first time it needs to hash anything,
-    since `DuporaNativeBindings._openLibrary()`
-    (`lib/core/native/dupora_native_bindings.dart`) has nowhere to find
-    the library outside a source checkout.
-  - **macOS currently fails to even compile** on `macos-latest`: `error:
-    cannot find 'TrashChannel' in scope` in `MainFlutterWindow.swift`.
-    `macos/Runner/TrashChannel.swift` (the Swift Trash-deletion bridge)
-    exists in the repo but was never added to
-    `macos/Runner.xcodeproj/project.pbxproj`'s build target, so Xcode
-    doesn't compile it at all. This is a real, pre-existing Xcode-project
-    configuration bug, confirmed by this workflow's first actual run - not
-    fixed here, since it's an application/Xcode-project issue outside this
-    release-workflow change's scope, but tracked as a known limitation
-    rather than silently worked around.
-  - Neither is a claim that macOS/Linux support doesn't work at the source
-    level - both are written against their documented platform APIs (see
-    README's Known Limitations) - only that the *packaged, distributable*
-    artifact isn't ready for either platform yet, for two different and
-    now precisely identified reasons.
+  attached to the release, because neither platform's app package bundles
+  the native engine library yet (see the macOS/Linux sections above) - a
+  compiled artifact would fail at runtime the first time it needs to hash
+  anything, since `DuporaNativeBindings._openLibrary()`
+  (`lib/core/native/dupora_native_bindings.dart`) has nowhere to find the
+  library outside a source checkout.
+  - **Both now actually compile successfully**, verified for real on
+    GitHub-hosted runners: Linux since the workflow's first run
+    (2026-08-11, run 31434128772); macOS since a follow-up fix registering
+    `macos/Runner/TrashChannel.swift` in the Xcode project, which the same
+    first run had caught as a genuine compile failure (`error: cannot find
+    'TrashChannel' in scope`) - see the macOS section above for the fix and
+    run 31437939750 for its passing verification.
+  - This is not a claim that macOS/Linux support doesn't work at the
+    source level - both are written against their documented platform
+    APIs (see README's Known Limitations) - only that the *packaged,
+    distributable* artifact isn't ready for either platform yet, and now
+    for the single, same, precisely identified reason (native engine
+    bundling) rather than two different ones.
 - The workflow also supports manual `workflow_dispatch` runs (for testing
   the pipeline itself without cutting a release) - these compute a
   placeholder `0.0.0-dev.<run number>` version and run every job above,
