@@ -8,6 +8,8 @@ flutter test                                              61 / 61 passing   (tes
 flutter test integration_test/app_test.dart -d windows      2 / 2 passing   (real compiled exe)
 flutter test integration_test/dataset_test.dart -d windows  1 / 1 passing   (real compiled exe)
 flutter test integration_test/stress_test.dart -d windows   1 / 1 passing   (real compiled exe)
+flutter test integration_test/linux_native_engine_test.dart
+  -d linux --release (GitHub Actions ubuntu-latest)          1 / 1 passing   (real compiled bundle)
 flutter analyze                                              0 issues
 cargo clippy                                                   0 warnings (-D warnings)
 dart format                                                    clean
@@ -31,6 +33,10 @@ flutter test
 flutter test integration_test/app_test.dart -d windows
 flutter test integration_test/dataset_test.dart -d windows
 flutter test integration_test/stress_test.dart -d windows
+
+# Requires a Linux build environment (GTK3 dev headers) plus a display -
+# xvfb-run provides a virtual one on a headless CI runner; see BUILD.md:
+xvfb-run -a flutter test integration_test/linux_native_engine_test.dart -d linux --release
 ```
 
 ## Rust (`rust/`)
@@ -242,6 +248,32 @@ scan of the same unchanged tree is meaningfully faster (cache effect
 holding up under load, not just in a small unit test), and verifies
 cancellation still takes effect promptly under this load. See
 PERFORMANCE.md for the actual numbers this produced.
+
+### `integration_test/linux_native_engine_test.dart` - Linux native-engine bundling verification
+
+Written specifically to verify the fix for a real bug: the Linux release
+bundle never included `libdupora_engine.so`, so the packaged app would
+have failed the first time it tried to hash anything (see BUILD.md's
+Linux section for the CMake/FFI-loader fix). Run against the actual
+compiled Linux bundle on GitHub Actions (`ubuntu-latest`, under
+`xvfb-run` since the runner has no display):
+
+1. Calls `NativeHasher().engineVersion()` directly, before touching any
+   UI - if the bundled `.so` weren't found, `DuporaNativeBindings
+   ._openLibrary()` throws immediately here, with nothing downstream able
+   to mask it.
+2. Creates two genuinely identical files and one same-size-but-different-
+   content file in a fresh temp directory.
+3. Drives the real app through a real scan (`AppController.addCustomFolder`
+   + "Start Scan", same pattern as `app_test.dart`).
+4. Asserts exactly one duplicate group is found, containing exactly the
+   two identical files, and that the same-size-different-content file is
+   never classified as a duplicate of them - a result that's only
+   possible if the actual Rust BLAKE3 engine executed a real full-content
+   hash comparison, not just the Stage 1 size grouping.
+
+No mocks anywhere in this path - real dlopen, real BLAKE3, real
+filesystem, real widget tree.
 
 ## A hang bug this test suite caught
 

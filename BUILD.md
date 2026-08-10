@@ -263,10 +263,53 @@ flutter build linux --release
 ```
 
 Needs the GTK3 development headers Flutter's Linux desktop embedder
-requires (`libgtk-3-dev` and friends) on the build machine. **Not built or
-run in this session - no Linux hardware was available**; `LinuxDeleter`'s
-`gio trash` call and `LinuxStorageDetector`'s `/proc/mounts` parsing were
-validated with unit tests against synthetic input instead (see TESTING.md).
+requires (`libgtk-3-dev` and friends) on the build machine. Not built or
+run on local hardware in any of this project's sessions - no Linux
+machine has ever been available here - but **fully built, bundled, and
+runtime-verified for real on a GitHub-hosted `ubuntu-latest` (x86_64)
+runner**, via `.github/workflows/release.yml`'s `build-linux` job:
+
+- **Native engine bundling**: `rust/target/release/libdupora_engine.so`
+  (built via plain `cargo build --release`, no cross-compilation needed
+  since the runner's own architecture matches the target) is installed by
+  `linux/CMakeLists.txt` into `build/linux/x64/release/bundle/lib/
+  libdupora_engine.so`, next to the plugin libraries, mirroring the exact
+  `install(FILES ...)` pattern `windows/CMakeLists.txt` already used for
+  `dupora_engine.dll`. This was the actual gap: the file existed in the
+  Rust build output but nothing copied it into the Flutter Linux bundle
+  Flutter itself produces.
+- **FFI loader**: `lib/core/native/dupora_native_bindings.dart`'s Linux
+  branch now resolves `bundle/lib/libdupora_engine.so` via an explicit,
+  unambiguous path computed from `Platform.resolvedExecutable`'s directory
+  (`<exe dir>/lib/libdupora_engine.so`), rather than relying only on a bare
+  `dlopen("libdupora_engine.so")` and the executable's `$ORIGIN/lib` RPATH
+  - which Flutter's own bundled libraries rely on safely because they're
+  linked at compile time (`target_link_libraries`), a different resolution
+  path than a pure runtime `dlopen` call from inside the Dart VM. Windows,
+  macOS, and Android loading are unchanged.
+- **Runtime verification**: `integration_test/linux_native_engine_test.dart`
+  drives the actual compiled release bundle's executable (`xvfb-run -a
+  flutter test integration_test/linux_native_engine_test.dart -d linux
+  --release`, since GitHub's runner has no display) - it calls the native
+  engine directly first (proving `DynamicLibrary.open` succeeds with no
+  fallback needed), then runs a real scan against two genuinely identical
+  files and one same-size-but-different-content file, and asserts the
+  duplicate pair is correctly found while the different-content file is
+  correctly excluded - only possible if the real BLAKE3 engine actually
+  executed. See TESTING.md for the full result.
+- **Architecture**: x86_64 only - GitHub's `ubuntu-latest` runner is
+  x86_64, and that's the only architecture built, verified, or claimed. No
+  ARM64 Linux build exists.
+- **Portable package**: CI packages the verified bundle as
+  `Dupora-Linux-x64-vX.Y.Z.tar.gz` (`tar -C build/linux/x64/release -czf
+  ... bundle`). To run it: `tar xzf Dupora-Linux-x64-vX.Y.Z.tar.gz && ./
+  bundle/dupora` - no installation, and Rust/Cargo/Flutter are not
+  required on the machine running it. Not included in the already-published
+  `v1.0.0` release; attached automatically starting with the next tag.
+- `LinuxDeleter`'s `gio trash` call and `LinuxStorageDetector`'s
+  `/proc/mounts` parsing are separately validated with unit tests against
+  synthetic input (see TESTING.md) - the runtime verification above
+  exercises scanning and hashing, not deletion.
 
 ## Verifying without a full platform build
 
@@ -326,32 +369,24 @@ version consistent.
 
 **What CI actually produces vs. what it doesn't:**
 
-- **Windows and Android are the two release-gating platforms** - a
-  release is only published once both succeed, and the Windows job's
-  installer is genuinely install/launch/uninstall-tested on the runner
-  itself before anything is published (not just compiled).
-- **macOS and Linux are built on GitHub-hosted runners as a compile-health
-  check only** (`continue-on-error: true`, so a failure here never blocks
-  the Windows/Android release) and their output is deliberately *not*
-  attached to the release, because neither platform's app package bundles
-  the native engine library yet (see the macOS/Linux sections above) - a
-  compiled artifact would fail at runtime the first time it needs to hash
-  anything, since `DuporaNativeBindings._openLibrary()`
-  (`lib/core/native/dupora_native_bindings.dart`) has nowhere to find the
-  library outside a source checkout.
-  - **Both now actually compile successfully**, verified for real on
-    GitHub-hosted runners: Linux since the workflow's first run
-    (2026-08-11, run 31434128772); macOS since a follow-up fix registering
-    `macos/Runner/TrashChannel.swift` in the Xcode project, which the same
-    first run had caught as a genuine compile failure (`error: cannot find
-    'TrashChannel' in scope`) - see the macOS section above for the fix and
-    run 31437939750 for its passing verification.
-  - This is not a claim that macOS/Linux support doesn't work at the
-    source level - both are written against their documented platform
-    APIs (see README's Known Limitations) - only that the *packaged,
-    distributable* artifact isn't ready for either platform yet, and now
-    for the single, same, precisely identified reason (native engine
-    bundling) rather than two different ones.
+- **Windows, Android, and Linux are the three release-gating platforms** -
+  a release is only published once all three succeed. The Windows job's
+  installer is genuinely install/launch/uninstall-tested, and the Linux
+  job's bundle is genuinely runtime-tested (real native-engine load, real
+  BLAKE3 hashing, real duplicate detection), on the runner itself before
+  anything is published - not just compiled. No `continue-on-error`
+  anywhere in this set: if any of the three fails, it fails honestly and
+  the release does not happen.
+- **macOS is built on a GitHub-hosted runner as a compile-health check
+  only** (`continue-on-error: true`, so a failure here never blocks the
+  release) and its output is deliberately *not* attached to a release: it
+  compiles (fixed 2026-08-11, run 31437939750 - see the macOS section
+  above), but its packaged `.app` doesn't bundle the native engine library
+  yet, the same gap Linux had until this fix (run ID recorded in the
+  Linux section above). This is not a claim that macOS support doesn't
+  work at the source level (see README's Known Limitations) - only that
+  the *packaged, distributable* artifact isn't ready yet, for one
+  precisely identified, already-solved-once-for-Linux reason.
 - The workflow also supports manual `workflow_dispatch` runs (for testing
   the pipeline itself without cutting a release) - these compute a
   placeholder `0.0.0-dev.<run number>` version and run every job above,
