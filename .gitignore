@@ -55,3 +55,7 @@ app.*.map.json
 
 # Claude Code harness internal state (not project source)
 .claude/
+
+# Python (branding/scripts/ generation pipeline)
+__pycache__/
+*.pyc
