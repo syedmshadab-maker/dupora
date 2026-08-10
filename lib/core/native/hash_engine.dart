@@ -167,6 +167,12 @@ class NativeHasher {
 class IncrementalHasher {
   IncrementalHasher() : _bindings = DuporaNativeBindings.instance() {
     _handle = _bindings.streamHasherNew();
+    if (_handle == 0) {
+      // 0 is a reserved sentinel the native side returns only when an
+      // internal panic was caught while creating the hasher (see
+      // rust/src/ffi/stream_hasher.rs) - never a valid handle otherwise.
+      throw StateError('Failed to create native incremental hasher');
+    }
   }
 
   final DuporaNativeBindings _bindings;

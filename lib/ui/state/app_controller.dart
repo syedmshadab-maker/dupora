@@ -74,6 +74,11 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void clearError() {
+    lastError = null;
+    notifyListeners();
+  }
+
   void toggleRootSelected(String path) {
     if (!selectedRoots.remove(path)) selectedRoots.add(path);
     notifyListeners();
@@ -99,9 +104,15 @@ class AppController extends ChangeNotifier {
 
   Future<void> startScan() async {
     if (selectedRoots.isEmpty) return;
+    // Reentrancy guard: a double-tap on "Start Scan" before the UI rebuilds
+    // onto the Scan screen could otherwise spin up two concurrent
+    // ScanEngine instances (two worker pools hashing the same files, two
+    // writers racing on the same cache database).
+    if (screen == AppScreen.scanning) return;
     screen = AppScreen.scanning;
     lastResult = null;
     lastProgress = null;
+    lastError = null;
     _keepOverrides.clear();
     _selectedForDeletion.clear();
     notifyListeners();
@@ -113,11 +124,22 @@ class AppController extends ChangeNotifier {
       notifyListeners();
     });
 
-    final result = await engine.start(selectedRoots.toList());
-    lastResult = result;
-    screen = AppScreen.results;
-    _applyDefaultSelection();
-    notifyListeners();
+    try {
+      final result = await engine.start(selectedRoots.toList());
+      lastResult = result;
+      screen = AppScreen.results;
+      _applyDefaultSelection();
+    } catch (e) {
+      // Without this, any exception here (a database error, a worker
+      // isolate failing to spawn, disk I/O failure while writing the
+      // cache, etc.) would propagate uncaught out of this async callback
+      // and leave the UI stuck on the Scanning screen forever - the user
+      // would have no way to recover except restarting the app.
+      lastError = 'Scan failed: $e';
+      screen = AppScreen.home;
+    } finally {
+      notifyListeners();
+    }
   }
 
   void pauseScan() {

@@ -25,15 +25,33 @@ fn next_handle() -> u64 {
     NEXT.fetch_add(1, Ordering::Relaxed)
 }
 
-/// Creates a new incremental hasher and returns an opaque non-zero handle.
-#[no_mangle]
-pub extern "C" fn dupora_stream_hasher_new() -> u64 {
-    let handle = next_handle();
+/// Locks the registry, recovering from poisoning rather than propagating a
+/// second panic. A prior panic while the lock was held (e.g. an allocation
+/// failure inside `HashMap::insert`) would otherwise poison the mutex and
+/// make every subsequent call here panic too - including from
+/// `dupora_stream_hasher_new`/`_abort`, which historically were not
+/// wrapped in `catch_unwind` and would have let that panic unwind across
+/// the FFI boundary (undefined behavior). The registry's own contents
+/// (independent hasher instances keyed by handle) are never left
+/// structurally invalid by a panic inside one entry's operation, so
+/// recovering the guard is safe here.
+fn lock_registry() -> std::sync::MutexGuard<'static, HashMap<u64, blake3::Hasher>> {
     registry()
         .lock()
-        .unwrap()
-        .insert(handle, blake3::Hasher::new());
-    handle
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Creates a new incremental hasher and returns an opaque non-zero handle,
+/// or `0` if an internal panic was caught while creating it (handles
+/// otherwise start at 1, so 0 is never a valid handle).
+#[no_mangle]
+pub extern "C" fn dupora_stream_hasher_new() -> u64 {
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        let handle = next_handle();
+        lock_registry().insert(handle, blake3::Hasher::new());
+        handle
+    }));
+    result.unwrap_or(0)
 }
 
 /// Feeds one chunk of externally-sourced bytes (e.g. from a SAF
@@ -56,7 +74,7 @@ pub unsafe extern "C" fn dupora_stream_hasher_update(
         } else {
             slice::from_raw_parts(ptr, len)
         };
-        let mut map = registry().lock().unwrap();
+        let mut map = lock_registry();
         match map.get_mut(&handle) {
             Some(hasher) => {
                 hasher.update(bytes);
@@ -76,7 +94,7 @@ pub unsafe extern "C" fn dupora_stream_hasher_update(
 #[no_mangle]
 pub unsafe extern "C" fn dupora_stream_hasher_finalize(handle: u64, out_hash: *mut u8) -> i32 {
     let result = catch_unwind(AssertUnwindSafe(|| {
-        let mut map = registry().lock().unwrap();
+        let mut map = lock_registry();
         match map.remove(&handle) {
             Some(hasher) => {
                 let digest = hasher.finalize();
@@ -95,8 +113,11 @@ pub unsafe extern "C" fn dupora_stream_hasher_finalize(handle: u64, out_hash: *m
 /// cancellation/error cleanup so the registry never leaks entries).
 #[no_mangle]
 pub extern "C" fn dupora_stream_hasher_abort(handle: u64) -> i32 {
-    registry().lock().unwrap().remove(&handle);
-    StatusCode::Ok as i32
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        lock_registry().remove(&handle);
+        StatusCode::Ok as i32
+    }));
+    result.unwrap_or(StatusCode::Unexpected as i32)
 }
 
 #[cfg(test)]

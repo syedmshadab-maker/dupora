@@ -95,13 +95,30 @@ class SafeDeleteCoordinator {
       if (!await entity.exists()) {
         return DeleteResult(path, DeleteOutcome.notFound);
       }
-      final currentSize = await entity.length();
-      if (currentSize != file.size) {
+      final stat = await entity.stat();
+      if (stat.size != file.size) {
         return DeleteResult(
           path,
           DeleteOutcome.identityMismatch,
           error:
-              'size changed since scan ($currentSize != ${file.size}); refusing to delete',
+              'size changed since scan (${stat.size} != ${file.size}); refusing to delete',
+        );
+      }
+      // Belt-and-braces beyond the size check: if some other file was
+      // deleted and a *different* file of the coincidentally-same size
+      // was later created at this exact path (e.g. an app re-downloading
+      // to the same filename), the size check alone wouldn't catch it -
+      // but a fresh write essentially always changes mtime too, even when
+      // the byte count happens to match. A full re-hash would be the only
+      // airtight check; this is the cheap version of the same guarantee
+      // the persistent cache already relies on for validity (size + mtime
+      // - see HashCacheRepository).
+      if (stat.modified != file.modifiedAt) {
+        return DeleteResult(
+          path,
+          DeleteOutcome.identityMismatch,
+          error:
+              'modified time changed since scan (${stat.modified} != ${file.modifiedAt}); refusing to delete',
         );
       }
 

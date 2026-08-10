@@ -46,6 +46,13 @@ class HomeScreen extends StatelessWidget {
                   'Choose one or more drives or folders. Only exact byte-for-byte duplicates are ever reported.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
+                if (controller.lastError != null) ...[
+                  const SizedBox(height: 16),
+                  _ErrorBanner(
+                    message: controller.lastError!,
+                    onDismiss: controller.clearError,
+                  ),
+                ],
                 const SizedBox(height: 16),
                 for (final volume in controller.volumes)
                   _VolumeTile(
@@ -220,6 +227,43 @@ class _FolderTile extends StatelessWidget {
         leading: Icon(Icons.folder_outlined, color: scheme.primary),
         title: Text(path, overflow: TextOverflow.ellipsis),
         trailing: Checkbox(value: selected, onChanged: (_) => onTap()),
+      ),
+    );
+  }
+}
+
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message, required this.onDismiss});
+
+  final String message;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.errorContainer,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline, color: scheme.onErrorContainer, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(color: scheme.onErrorContainer),
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.close, color: scheme.onErrorContainer, size: 18),
+            onPressed: onDismiss,
+            tooltip: 'Dismiss',
+            visualDensity: VisualDensity.compact,
+          ),
+        ],
       ),
     );
   }
