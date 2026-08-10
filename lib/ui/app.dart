@@ -10,7 +10,8 @@ import 'state/app_controller.dart';
 class DuporaApp extends StatelessWidget {
   const DuporaApp({super.key});
 
-  static const _seed = Color(0xFF3E63DD);
+  /// Brand Electric Blue - see branding/BRAND_GUIDELINES.md.
+  static const _seed = Color(0xFF0EA5FF);
 
   @override
   Widget build(BuildContext context) {
