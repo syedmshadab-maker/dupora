@@ -45,7 +45,13 @@ class LinuxStorageDetector implements StorageDetector {
       final fsType = fields[2];
 
       if (_virtualFsTypes.contains(fsType)) continue;
-      if (!device.startsWith('/dev/') && !device.contains(':/')) continue;
+      // Real block devices ("/dev/sda1"), NFS-style ("server:/path"), and
+      // CIFS/UNC-style ("//server/share") are all legitimate; "none" and
+      // similar pseudo-devices are what's left after the fsType filter and
+      // are excluded here.
+      final looksLikeRealDevice =
+          device.startsWith('/dev/') || device.contains(':/') || device.startsWith('//');
+      if (!looksLikeRealDevice) continue;
       if (mountPoint == '/boot' || mountPoint == '/boot/efi') continue;
 
       final stats = await statFn(mountPoint);

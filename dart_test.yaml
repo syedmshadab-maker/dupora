@@ -1,0 +1,6 @@
+tags:
+  integration:
+    description: >-
+      Exercises the real native engine, real temp files, and real isolates
+      end to end (no mocks). Slower than pure unit tests; still fast enough
+      to run in CI by default.

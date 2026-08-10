@@ -41,10 +41,13 @@ const int _batchSize = 500;
 
 /// Runs Stage 0 (file discovery) on a dedicated isolate so enumerating
 /// millions of directory entries never blocks the UI isolate. Returns the
-/// isolate's [SendPort]-facing [ReceivePort] stream directly; the caller
-/// listens for [DiscoveryBatch] messages followed by one final
-/// [DiscoveryDone].
-Stream<Object> runFileDiscovery(DiscoveryOptions options, CancelSignal cancel) {
+/// isolate's raw [ReceivePort] directly (it implements `Stream`); the
+/// caller listens for [DiscoveryBatch] messages followed by one final
+/// [DiscoveryDone], and **must call `.close()` on the returned port** once
+/// it observes [DiscoveryDone] - a `ReceivePort` never completes its stream
+/// on its own, so an `await for` loop over it would otherwise hang forever
+/// even after the isolate has finished and sent its last message.
+ReceivePort runFileDiscovery(DiscoveryOptions options, CancelSignal cancel) {
   final receivePort = ReceivePort();
   final init = _DiscoveryInit(
     roots: options.roots,
@@ -55,7 +58,7 @@ Stream<Object> runFileDiscovery(DiscoveryOptions options, CancelSignal cancel) {
     sendPort: receivePort.sendPort,
   );
   Isolate.spawn(_discoveryIsolateMain, init, debugName: 'dupora-discovery');
-  return receivePort.map((event) => event as Object);
+  return receivePort;
 }
 
 class _DiscoveryInit {

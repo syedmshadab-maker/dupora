@@ -99,6 +99,7 @@ class ScanEngine {
         ),
         cancel,
       );
+      var discoveryCancelled = false;
       await for (final event in discovery) {
         if (event is DiscoveryBatch) {
           files.addAll(event.files);
@@ -112,11 +113,19 @@ class ScanEngine {
           );
           _emit(_progress);
         } else if (event is DiscoveryDone) {
-          if (event.cancelled) return _finishCancelled(files.length);
+          // A ReceivePort's stream never completes on its own, so this is
+          // the only way out of the loop - see runFileDiscovery's doc.
+          discoveryCancelled = event.cancelled;
+          break;
         }
         await _waitIfPaused();
-        if (cancel.isCancelled) return _finishCancelled(files.length);
+        if (cancel.isCancelled) {
+          discoveryCancelled = true;
+          break;
+        }
       }
+      discovery.close();
+      if (discoveryCancelled) return _finishCancelled(files.length);
 
       // --- Stage 1: size grouping ---
       _progress = _progress.copyWith(phase: ScanPhase.sizeGrouping);
