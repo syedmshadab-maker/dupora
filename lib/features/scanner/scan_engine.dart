@@ -138,6 +138,12 @@ class ScanEngine {
       discovery.close();
       if (discoveryCancelled) return _finishCancelled(files.length);
 
+      // Drop cache rows for files that no longer exist under the scanned
+      // roots (deleted/moved since they were last cached) - otherwise
+      // they'd sit in the database forever, since nothing will ever look
+      // them up again by that exact path.
+      await _cache.pruneMissing(roots, files.map((f) => f.path).toSet());
+
       // --- Stage 1: size grouping ---
       _progress = _progress.copyWith(phase: ScanPhase.sizeGrouping);
       _emit(_progress);

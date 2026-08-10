@@ -123,4 +123,51 @@ void main() {
       expect(await repo.lookup(rescanChanged), isNull);
     },
   );
+
+  group('pruneMissing', () {
+    test(
+      'removes a cache row for a file deleted from a scanned root',
+      () async {
+        final deleted = _file(r'C:\scan_root\deleted.txt');
+        await repo.storeFull(deleted, 'p', 'f');
+
+        final pruned = await repo.pruneMissing([r'C:\scan_root'], <String>{});
+
+        expect(pruned, 1);
+        expect(await repo.lookup(_file(r'C:\scan_root\deleted.txt')), isNull);
+      },
+    );
+
+    test('keeps a cache row for a file still present in this scan', () async {
+      final present = _file(r'C:\scan_root\present.txt');
+      await repo.storeFull(present, 'p', 'f');
+
+      final pruned = await repo.pruneMissing([r'C:\scan_root'], {present.path});
+
+      expect(pruned, 0);
+      expect((await repo.lookup(present))?.fullHashHex, 'f');
+    });
+
+    test(
+      'never touches a cache row outside the scanned roots, even if absent from presentPaths',
+      () async {
+        final elsewhere = _file(r'D:\untouched_drive\other.txt');
+        await repo.storeFull(elsewhere, 'p', 'f');
+
+        final pruned = await repo.pruneMissing([r'C:\scan_root'], <String>{});
+
+        expect(pruned, 0);
+        expect((await repo.lookup(elsewhere))?.fullHashHex, 'f');
+      },
+    );
+
+    test('a no-op scan root list prunes nothing', () async {
+      final file = _file(r'C:\scan_root\a.txt');
+      await repo.storeFull(file, 'p', 'f');
+
+      final pruned = await repo.pruneMissing(const [], <String>{});
+
+      expect(pruned, 0);
+    });
+  });
 }
