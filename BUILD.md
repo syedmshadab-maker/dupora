@@ -280,6 +280,64 @@ TESTING.md for full output).
 ## CI
 
 `.github/workflows/ci.yml` runs the verification block above (Rust fmt/
-clippy/test, Dart format/analyze/test) on every push, plus a Windows
-release-build job (which will succeed on GitHub's hosted runners, which
-have the MSVC toolchain preinstalled, unlike this build environment).
+clippy/test, Dart format/analyze/test) on every push to `master` and on
+every pull request, plus per-platform release-build jobs for Windows,
+Android, macOS, and Linux (which will succeed on GitHub's hosted runners,
+which have each platform's toolchain preinstalled, unlike this sandboxed
+build environment).
+
+## Automated GitHub Releases
+
+`.github/workflows/release.yml` builds and publishes a full GitHub Release
+automatically whenever a version tag is pushed:
+
+```powershell
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+This triggers, in order: the same Rust + Dart quality gate as CI (any
+failure stops everything - no partially-validated release is ever
+published); a Windows job that builds the release exe, compiles the WiX
+MSI + Burn bootstrapper installer from `installer/dupora.wxs` and
+`installer/bundle.wxs` exactly as described above, builds the portable
+ZIP, and actually silently installs, launches, and uninstalls the
+generated installer on the runner as a smoke test; and an Android job that
+cross-compiles the arm64 engine, builds a release APK, and verifies its
+contents with `aapt2` (package identity, adaptive launcher icon, native
+engine library). Once the Windows and Android jobs both succeed, a final
+job generates `SHA256SUMS.txt` and publishes a GitHub Release for the tag
+with all artifacts attached.
+
+**Version numbers are never hardcoded in the workflow.** The tag itself
+(`vX.Y.Z`) is the single source of truth; a `prepare` job parses it and
+passes the result to every other job via `flutter build --build-name=...
+--build-number=...` (for the app) and a WiX `-d AppVersion=...` variable
+(for the installer), keeping the tag, the built app, and the installer
+version consistent.
+
+**What CI actually produces vs. what it doesn't:**
+
+- **Windows and Android are the two release-gating platforms** - a
+  release is only published once both succeed, and the Windows job's
+  installer is genuinely install/launch/uninstall-tested on the runner
+  itself before anything is published (not just compiled).
+- **macOS and Linux are built on GitHub-hosted runners as a compile-health
+  check only** and their output is deliberately *not* attached to the
+  release. Reason: unlike `windows/CMakeLists.txt` (which has an explicit
+  `install(FILES ...)` rule bundling `dupora_engine.dll` next to
+  `Runner.exe`), neither `linux/CMakeLists.txt` nor the macOS Xcode
+  project currently has an equivalent step bundling
+  `libdupora_engine.so`/`.dylib` into the packaged app. A build produced
+  today would compile successfully and then fail at runtime the first
+  time it needs to hash anything, since `DuporaNativeBindings._openLibrary()`
+  (`lib/core/native/dupora_native_bindings.dart`) has nowhere to find the
+  library outside a source checkout. This is a known, tracked packaging
+  gap - not a claim that macOS/Linux support doesn't work, but an honest
+  statement that the *packaged, distributable* artifact isn't ready for
+  either platform yet.
+- The workflow also supports manual `workflow_dispatch` runs (for testing
+  the pipeline itself without cutting a release) - these compute a
+  placeholder `0.0.0-dev.<run number>` version and run every job above,
+  but the final release-publishing job only ever runs for an actual
+  `vX.Y.Z` tag push, never from a manual run or an arbitrary branch.

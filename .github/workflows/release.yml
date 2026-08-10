@@ -1,0 +1,452 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch: {}
+
+# Default to read-only; the one job that needs to publish a release
+# elevates its own permissions explicitly below.
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: '3.41.9'
+
+jobs:
+  # ---------------------------------------------------------------------
+  # Determine the release version from the pushed tag (never hardcoded).
+  # workflow_dispatch runs (used for manual pipeline testing) get a
+  # non-release placeholder version and are never allowed to publish a
+  # GitHub Release - only an actual `vX.Y.Z` tag push can do that.
+  # ---------------------------------------------------------------------
+  prepare:
+    name: Determine version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.compute.outputs.version }}
+      msi_version: ${{ steps.compute.outputs.msi_version }}
+      is_release: ${{ steps.compute.outputs.is_release }}
+    steps:
+      - id: compute
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+            IS_RELEASE=true
+          else
+            VERSION="0.0.0-dev.${GITHUB_RUN_NUMBER}"
+            IS_RELEASE=false
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "msi_version=${VERSION%%-*}.0" >> "$GITHUB_OUTPUT"
+          echo "is_release=$IS_RELEASE" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: $VERSION (is_release=$IS_RELEASE)"
+
+  # ---------------------------------------------------------------------
+  # Quality gate: the full Rust + Dart check suite. Nothing downstream
+  # runs unless this passes.
+  # ---------------------------------------------------------------------
+  quality-gate:
+    name: Quality gate (Rust + Dart)
+    runs-on: windows-latest
+    needs: prepare
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: cargo fmt --check
+        working-directory: rust
+        run: cargo fmt --check
+      - name: cargo clippy
+        working-directory: rust
+        run: cargo clippy --release --all-targets -- -D warnings
+      - name: cargo test
+        working-directory: rust
+        run: cargo test --release
+      - name: Build release cdylib (for Dart tests below)
+        working-directory: rust
+        run: cargo build --release
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+      - name: dart format --set-exit-if-changed
+        run: dart format --output=none --set-exit-if-changed lib test
+      - run: flutter analyze
+      - run: flutter test
+
+  # ---------------------------------------------------------------------
+  # Windows: build the release exe, the WiX MSI + Burn bootstrapper
+  # installer, and the portable ZIP. Required for the release to publish.
+  # ---------------------------------------------------------------------
+  build-windows:
+    name: Build Windows release + installer
+    runs-on: windows-latest
+    needs: [prepare, quality-gate]
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      MSI_VERSION: ${{ needs.prepare.outputs.msi_version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Build native engine
+        working-directory: rust
+        run: cargo build --release
+
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+      - run: flutter config --enable-windows-desktop
+      - name: flutter build windows --release
+        run: >
+          flutter build windows --release
+          --build-name=$env:VERSION
+          --build-number=$env:GITHUB_RUN_NUMBER
+
+      - name: Verify release output
+        shell: pwsh
+        run: |
+          $release = "build\windows\x64\runner\Release"
+          $required = @("dupora.exe","dupora_engine.dll","sqlite3.dll","flutter_windows.dll")
+          foreach ($f in $required) {
+            if (-not (Test-Path "$release\$f")) { throw "Missing required Windows release file: $f" }
+          }
+          Write-Output "All required Windows release files present."
+
+      - name: Install WiX Toolset
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.0.2
+          wix extension add WixToolset.UI.wixext/5.0.2 -g
+          wix extension add WixToolset.BootstrapperApplications.wixext/5.0.2 -g
+
+      - name: Build MSI
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          wix build installer\dupora.wxs -arch x64 -ext WixToolset.UI.wixext `
+            -d RepoRoot="$PWD" `
+            -d ReleaseDir="$PWD\build\windows\x64\runner\Release" `
+            -d AppVersion="$env:MSI_VERSION" `
+            -o "dist\Dupora-Setup-x64-v$env:VERSION.msi"
+
+      - name: Build bootstrapper installer exe
+        shell: pwsh
+        run: |
+          wix build installer\bundle.wxs -arch x64 -ext WixToolset.BootstrapperApplications.wixext `
+            -d RepoRoot="$PWD" `
+            -d MsiPath="$PWD\dist\Dupora-Setup-x64-v$env:VERSION.msi" `
+            -d AppVersion="$env:MSI_VERSION" `
+            -o "dist\Dupora-Setup-x64-v$env:VERSION.exe"
+          Remove-Item dist\*.wixpdb -ErrorAction SilentlyContinue
+
+      - name: Build portable ZIP
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "build\windows\x64\runner\Release\*" `
+            -DestinationPath "dist\Dupora-Portable-x64-v$env:VERSION.zip" -Force
+
+      - name: Smoke-test the installer (silent install / launch / uninstall)
+        shell: pwsh
+        run: |
+          $exe = "dist\Dupora-Setup-x64-v$env:VERSION.exe"
+          $p = Start-Process -FilePath $exe -ArgumentList "/quiet" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Silent install failed with exit code $($p.ExitCode)" }
+
+          $installed = "$env:LOCALAPPDATA\Programs\Dupora\dupora.exe"
+          if (-not (Test-Path $installed)) { throw "dupora.exe not found after install" }
+
+          $proc = Start-Process -FilePath $installed -PassThru
+          Start-Sleep -Seconds 6
+          $alive = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
+          if (-not $alive) { throw "Installed dupora.exe exited unexpectedly on launch" }
+          Stop-Process -Id $proc.Id -Force
+
+          $u = Start-Process -FilePath $exe -ArgumentList "/uninstall","/quiet" -Wait -PassThru
+          if ($u.ExitCode -ne 0) { throw "Silent uninstall failed with exit code $($u.ExitCode)" }
+          if (Test-Path "$env:LOCALAPPDATA\Programs\Dupora") { throw "Install directory still present after uninstall" }
+          Write-Output "Installer smoke test passed: install, launch, uninstall all succeeded."
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dupora-windows-release
+          path: |
+            dist/Dupora-Setup-x64-v${{ needs.prepare.outputs.version }}.exe
+            dist/Dupora-Setup-x64-v${{ needs.prepare.outputs.version }}.msi
+            dist/Dupora-Portable-x64-v${{ needs.prepare.outputs.version }}.zip
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------
+  # Android: cross-compile the arm64 engine, build a single-ABI arm64
+  # release APK, verify its contents with aapt2. Required for release.
+  # ---------------------------------------------------------------------
+  build-android:
+    name: Build Android release APK
+    runs-on: ubuntu-latest
+    needs: [prepare, quality-gate]
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r28b
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Cross-compile native engine (arm64)
+        working-directory: rust
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+          # rust/.cargo/config.toml hardcodes this project's local Windows
+          # sandbox NDK path (C:/AndroidSDK/.../windows-x86_64/...), which
+          # doesn't exist on a Linux runner. Cargo's CARGO_TARGET_*_LINKER
+          # env var takes precedence over config.toml, so override it here
+          # with the correct linux-x86_64 NDK toolchain path rather than
+          # editing the checked-in config (which stays correct for local
+          # Windows development).
+          CC_aarch64_linux_android: ${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang
+          AR_aarch64_linux_android: ${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
+          CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: ${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang
+          CARGO_TARGET_AARCH64_LINUX_ANDROID_AR: ${{ steps.ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
+        run: cargo build --release --target aarch64-linux-android
+
+      - name: Stage jniLibs
+        run: |
+          mkdir -p android/app/src/main/jniLibs/arm64-v8a
+          cp rust/target/aarch64-linux-android/release/libdupora_engine.so android/app/src/main/jniLibs/arm64-v8a/
+
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+      - name: flutter build apk --release (arm64 only)
+        run: >
+          flutter build apk --release
+          --target-platform android-arm64
+          --build-name=$VERSION
+          --build-number=$GITHUB_RUN_NUMBER
+
+      - name: Rename and verify APK
+        run: |
+          mkdir -p dist
+          APK="dist/Dupora-v${VERSION}-android-arm64.apk"
+          cp build/app/outputs/flutter-apk/app-release.apk "$APK"
+
+          AAPT2="$(find "$ANDROID_HOME" -name aapt2 -type f | sort -V | tail -1)"
+          if [ -z "$AAPT2" ]; then echo "aapt2 not found under ANDROID_HOME" && exit 1; fi
+
+          "$AAPT2" dump badging "$APK" > /tmp/badging.txt
+          grep -q "package: name='com.dupora.dupora'" /tmp/badging.txt || (echo "Wrong/missing package identity" && exit 1)
+          cat /tmp/badging.txt
+
+          "$AAPT2" dump resources "$APK" > /tmp/resources.txt
+          grep -q "mipmap/ic_launcher" /tmp/resources.txt || (echo "Adaptive launcher icon not found in resources" && exit 1)
+
+          unzip -l "$APK" | grep -q "lib/arm64-v8a/libdupora_engine.so" || (echo "Native engine .so missing from APK" && exit 1)
+          echo "APK verified: package identity, launcher icon, and native engine all present."
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dupora-android-release
+          path: dist/Dupora-v${{ needs.prepare.outputs.version }}-android-arm64.apk
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------
+  # macOS / Linux: compile-verification only. These platforms' native
+  # engine libraries are not yet wired into the app package (no
+  # install/Copy-Files step bundles libdupora_engine.dylib/.so the way
+  # windows/CMakeLists.txt does for the .dll - see BUILD.md). A build
+  # that merely compiles would still fail at runtime, so these jobs
+  # deliberately do NOT produce a release artifact - they only prove
+  # (or disprove, for real, on a real runner) that the Flutter/CMake/
+  # Xcode build itself succeeds. continue-on-error so a failure here
+  # never blocks the Windows/Android release.
+  # ---------------------------------------------------------------------
+  build-macos:
+    name: Build macOS (compile check only, not released)
+    runs-on: macos-latest
+    needs: [prepare, quality-gate]
+    continue-on-error: true
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Build universal native engine
+        working-directory: rust
+        run: |
+          cargo build --release --target aarch64-apple-darwin
+          cargo build --release --target x86_64-apple-darwin
+          lipo -create -output target/release/libdupora_engine.dylib \
+            target/aarch64-apple-darwin/release/libdupora_engine.dylib \
+            target/x86_64-apple-darwin/release/libdupora_engine.dylib
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+      - name: flutter build macos --release
+        run: >
+          flutter build macos --release
+          --build-name=$VERSION
+          --build-number=$GITHUB_RUN_NUMBER
+
+  build-linux:
+    name: Build Linux (compile check only, not released)
+    runs-on: ubuntu-latest
+    needs: [prepare, quality-gate]
+    continue-on-error: true
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Install Linux desktop build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libgtk-3-dev
+      - name: Build native engine
+        working-directory: rust
+        run: cargo build --release
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+      - run: flutter config --enable-linux-desktop
+      - name: flutter build linux --release
+        run: >
+          flutter build linux --release
+          --build-name=$VERSION
+          --build-number=$GITHUB_RUN_NUMBER
+
+  # ---------------------------------------------------------------------
+  # Publish the GitHub Release. Only runs for an actual `vX.Y.Z` tag
+  # push (never for workflow_dispatch, which exists purely for testing
+  # the pipeline above) and only after quality-gate + both required
+  # platform builds (Windows, Android) succeed.
+  # ---------------------------------------------------------------------
+  release-publish:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: [prepare, quality-gate, build-windows, build-android, build-macos, build-linux]
+    if: needs.prepare.outputs.is_release == 'true'
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dupora-windows-release
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: dupora-android-release
+          path: dist
+
+      - name: Generate SHA-256 checksums
+        working-directory: dist
+        run: sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+
+      - name: Write release notes
+        run: |
+          cat > release-notes.md << EOF
+          ## Dupora v${VERSION}
+
+          Cross-platform duplicate file finder and cleaner. Exact duplicates
+          only, verified by full-file BLAKE3 - never filename, metadata, or
+          partial-content heuristics.
+
+          ### Supported platforms in this release
+
+          - **Windows** - fully built, packaged, and installer-verified by this
+            pipeline (silent install, launch, silent uninstall all confirmed
+            against the actual generated installer on a GitHub-hosted runner).
+          - **Android** (arm64-v8a, Android 11+) - release APK built and
+            verified (package identity, adaptive launcher icon, native engine
+            library all confirmed present via \`aapt2\`). Not device/emulator
+            runtime-tested by this pipeline.
+          - **macOS / Linux** - compiled on GitHub-hosted runners as a build
+            health check, but **not attached to this release**: the native
+            BLAKE3 engine library isn't yet wired into the packaged app bundle
+            for these two platforms (see BUILD.md), so a compiled artifact
+            would fail at runtime. Tracked as a known limitation, not shipped
+            until fixed.
+
+          ### Installation
+
+          - **Windows:** download \`Dupora-Setup-x64-v${VERSION}.exe\`, run it,
+            follow the installer. Or use the portable ZIP
+            (\`Dupora-Portable-x64-v${VERSION}.zip\`) - extract and run
+            \`dupora.exe\` directly, no installation needed.
+          - **Android:** download \`Dupora-v${VERSION}-android-arm64.apk\` and
+            install it (enable "install from unknown sources" if prompted).
+
+          ### Verification
+
+          Every artifact below was built fresh by this GitHub Actions workflow
+          from tag \`v${VERSION}\`, after the full Rust (\`cargo fmt\`,
+          \`clippy -D warnings\`, \`cargo test\`) and Dart (\`dart format\`,
+          \`flutter analyze\`, \`flutter test\`) quality gate passed. See
+          \`SHA256SUMS.txt\` below for integrity checksums of every file in
+          this release.
+
+          ### Known limitations
+
+          See README.md / BUILD.md in the repository for the full, honest
+          breakdown of what is and isn't verified in this build - notably:
+          macOS/Linux packaging (see above), and no on-device Android runtime
+          test in this automated pipeline.
+          EOF
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${VERSION}" \
+            --title "Dupora v${VERSION}" \
+            --notes-file release-notes.md \
+            dist/*

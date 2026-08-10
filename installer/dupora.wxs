@@ -4,7 +4,7 @@
 
   <Package Name="Dupora"
            Manufacturer="Dupora"
-           Version="1.0.0.0"
+           Version="$(var.AppVersion)"
            UpgradeCode="A5680DD9-7F90-4AED-9DA9-FA1F32D3E198"
            Language="1033"
            Compressed="yes"
@@ -17,7 +17,7 @@
 
     <Icon Id="AppIcon.ico" SourceFile="$(var.RepoRoot)\branding\windows\dupora.ico" />
     <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
-    <Property Id="ARPHELPLINK" Value="https://github.com/dupora/dupora" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/syedmshadab-maker/dupora" />
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
 
     <StandardDirectory Id="LocalAppDataFolder">
