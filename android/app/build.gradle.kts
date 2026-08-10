@@ -20,7 +20,6 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.dupora.dupora"
         // Android 11 (API 30) per project spec: scoped storage + SAF is the
         // baseline this app is designed against, so we don't try to support
@@ -33,8 +32,11 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // No production keystore exists in this environment (it must be
+            // provided by whoever owns the Play Store listing, not fabricated
+            // here). Signed with the debug key so `flutter build apk --release`
+            // still produces an installable artifact for local/CI testing; see
+            // BUILD.md for wiring a real release-signing config.
             signingConfig = signingConfigs.getByName("debug")
         }
     }

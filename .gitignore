@@ -47,3 +47,8 @@ app.*.map.json
 # Rust
 /rust/target/
 **/*.rs.bk
+
+# Cross-compiled native engine copies staged into the Android project by
+# the BUILD.md workflow - regenerate via `cargo build --target ...`, don't
+# commit the binary.
+/android/app/src/main/jniLibs/

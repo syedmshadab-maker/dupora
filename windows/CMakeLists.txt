@@ -81,6 +81,15 @@ install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}
 install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
+# Dupora's Rust native engine (see rust/), built separately via
+# `cargo build --release` before this CMake configure/build step (see
+# BUILD.md). Bundled next to the executable so dart:ffi's
+# DynamicLibrary.open("dupora_engine.dll") finds it via the default
+# Windows DLL search order (the executable's own directory).
+install(FILES "${PROJECT_SOURCE_DIR}/../rust/target/release/dupora_engine.dll"
+  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+  COMPONENT Runtime)
+
 if(PLUGIN_BUNDLED_LIBRARIES)
   install(FILES "${PLUGIN_BUNDLED_LIBRARIES}"
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
