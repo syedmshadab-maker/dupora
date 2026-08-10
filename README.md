@@ -1,5 +1,16 @@
 # Dupora
 
+> **Find Duplicates. Reclaim Space.**
+>
+> A production-grade cross-platform duplicate file finder and cleaner for
+> Windows, macOS, Linux, and Android 11+.
+
+**Repository:** https://github.com/syedmshadab-maker/dupora
+
+`duplicate-file-finder` · `duplicate-cleaner` · `file-deduplication` ·
+`blake3` · `flutter` · `rust` · `android` · `windows` · `macos` · `linux` ·
+`storage-utility`
+
 A cross-platform, production-grade duplicate file finder and cleaner for
 Windows, macOS, Linux, and Android 11+. Exact duplicates only, verified by
 full-file BLAKE3 - never filename, metadata, or partial-content heuristics.
@@ -126,7 +137,7 @@ document for specifics, and CHANGELOG.md for the full list.
 ## Quick start
 
 ```powershell
-git clone <repo>
+git clone https://github.com/syedmshadab-maker/dupora.git
 cd dupora
 cd rust && cargo build --release && cd ..
 flutter pub get
