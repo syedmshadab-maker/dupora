@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal">
+
+  <Bundle Name="Dupora"
+          Version="1.0.0.0"
+          Manufacturer="Dupora"
+          UpgradeCode="070B263F-916C-41D0-908F-D64B4C089410"
+          IconSourceFile="$(var.RepoRoot)\branding\windows\dupora.ico"
+          AboutUrl="https://github.com/dupora/dupora">
+
+    <BootstrapperApplication>
+      <bal:WixStandardBootstrapperApplication
+          LicenseFile="$(var.RepoRoot)\installer\license.rtf"
+          Theme="rtfLicense" />
+    </BootstrapperApplication>
+
+    <Chain>
+      <MsiPackage SourceFile="$(var.MsiPath)"
+                  Vital="yes" />
+    </Chain>
+
+  </Bundle>
+</Wix>

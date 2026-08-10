@@ -33,6 +33,11 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Release distributables (installer/portable ZIP/APK/checksums) - build
+# output regenerated from installer/*.wxs and the release build, not source.
+/dist/
+*.wixpdb
+
 # Symbolication related
 app.*.symbols
 

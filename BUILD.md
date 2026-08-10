@@ -81,6 +81,92 @@ flutter build windows --release
 This installed ~3.4 GB to `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools`
 and took about 12 minutes on this machine's network connection.
 
+### Windows installer
+
+`installer/dupora.wxs` and `installer/bundle.wxs` build the distributable
+installer with [WiX Toolset](https://wixtoolset.org/) v5 (a `dotnet` global
+tool, not a system install - see below for why that mattered here).
+`dupora.wxs` compiles to an MSI containing every file from
+`build\windows\x64\runner\Release\` plus Start Menu/Desktop shortcuts and an
+Add/Remove Programs entry; `bundle.wxs` wraps that MSI in a Burn bootstrapper
+to produce a single self-contained `.exe`. Neither is a self-extracting
+script - both are genuine Windows Installer / Burn packages inspectable with
+`msiexec` and any MSI tooling.
+
+```powershell
+dotnet tool install --global wix
+wix extension add WixToolset.UI.wixext/5.0.2 -g
+wix extension add WixToolset.BootstrapperApplications.wixext/5.0.2 -g
+
+wix build installer\dupora.wxs -arch x64 -ext WixToolset.UI.wixext `
+  -d RepoRoot="$PWD" -d ReleaseDir="$PWD\build\windows\x64\runner\Release" `
+  -o dist\Dupora-Setup-x64-v1.0.0.msi
+
+wix build installer\bundle.wxs -arch x64 -ext WixToolset.BootstrapperApplications.wixext `
+  -d RepoRoot="$PWD" -d MsiPath="$PWD\dist\Dupora-Setup-x64-v1.0.0.msi" `
+  -o dist\Dupora-Setup-x64-v1.0.0.exe
+```
+
+**Why WiX instead of Inno Setup, and why per-user scope instead of
+per-machine:** Inno Setup was tried first (it's the more commonly recommended
+tool for this kind of installer). Its own installer (`innosetup-6.7.3.exe`)
+refused to run at all in this sandboxed environment - `ExitCode 1`
+("Setup failed to initialize") both as a normal install and with
+`/PORTABLE=1` - because it requires administrator elevation that isn't
+available here, and no 7-Zip was present to extract it as an archive
+instead. WiX, obtained via `dotnet tool install --global wix` (installs into
+the user's own profile, no elevation needed), does not have this problem.
+The MSI was first authored with `Scope="perMachine"` (the conventional
+default, installing to `Program Files`), and it built fine - but installing
+it failed with **Windows Installer error 1925** ("You do not have sufficient
+privileges to complete this installation for all users of the machine"),
+for the same underlying reason Inno Setup failed: no admin rights in this
+environment. Switching to `Scope="perUser"`, installing to
+`%LocalAppData%\Programs\Dupora` (the same non-admin-install convention used
+by VS Code, Discord, and Slack), resolved this and allowed a full,
+genuine, non-elevated install/launch/uninstall cycle to be verified
+end-to-end in this environment - see below. On a normal user's own machine
+with administrator rights, `Scope="perMachine"` would also work; `perUser`
+was chosen specifically because it is the scope that is actually
+installable and testable without administrator rights, which is exactly the
+constraint this build environment has.
+
+**Verified in this environment** (`dist\Dupora-Setup-x64-v1.0.0.exe /quiet`,
+via `Start-Process -Wait -PassThru` for reliable exit-code capture):
+- Silent install: exit code 0. All 24 files present under
+  `%LocalAppData%\Programs\Dupora` (dupora.exe, dupora_engine.dll,
+  sqlite3.dll, flutter_windows.dll, both plugin DLLs, and the full `data\`
+  tree - flutter_assets, fonts, shaders, icudtl.dat, app.so).
+- Start Menu (`Dupora.lnk` + `Uninstall Dupora.lnk`) and Desktop
+  (`Dupora.lnk`) shortcuts created; Add/Remove Programs entry registered
+  (`DisplayName=Dupora`, `DisplayVersion=1.0.0.0`, `Publisher=Dupora`) under
+  both the bundle's own HKCU uninstall key and the underlying MSI's
+  per-user-managed HKLM uninstall key (both are normal for a per-user Burn+MSI
+  install and require no elevation to write).
+- Launched `dupora.exe` from the installed location (independent of
+  `D:\DUPORA`): process started, stayed running, and correctly initialized
+  its Drift/SQLite cache database at
+  `%APPDATA%\com.dupora\dupora\dupora_cache.sqlite` - the same behavior
+  already verified functionally correct end-to-end (scan, BLAKE3, duplicate
+  detection, Recycle Bin deletion) against this identical binary set via
+  `integration_test` (see TESTING.md). This installer pass re-verifies that
+  *packaging* didn't break anything, not the application logic itself, which
+  was already covered by `integration_test`; a full UI-driven functional
+  re-test of the *installed copy specifically* wasn't repeated because
+  `integration_test` builds and drives its own Flutter-managed binary and
+  can't be pointed at an arbitrary already-installed `.exe`.
+- Silent uninstall (`/uninstall /quiet`): exit code 0. Install directory,
+  both shortcuts, and the Add/Remove Programs entry were all confirmed gone
+  afterward.
+- The portable ZIP (`dist\Dupora-Portable-x64.zip` - just a zipped copy of
+  `build\windows\x64\runner\Release\`) was separately extracted to a clean
+  location and its `dupora.exe` launched the same way, with the same
+  result.
+
+`dist\SHA256SUMS.txt` has SHA-256 checksums (Windows PowerShell
+`Get-FileHash`, cross-checked with `sha256sum`) for the installer, the MSI,
+the portable ZIP, and the release APK.
+
 ## Android
 
 Requirements: Android SDK + NDK (this build used NDK 28.2.13676358),

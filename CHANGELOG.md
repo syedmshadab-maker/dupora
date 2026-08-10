@@ -2,6 +2,30 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased] - 2026-08-11 - Windows distributable installer
+
+- Added `installer/dupora.wxs` (MSI) and `installer/bundle.wxs` (Burn
+  bootstrapper `.exe`), built with WiX Toolset v5, packaging the complete
+  verified `build\windows\x64\runner\Release\` tree (dupora.exe,
+  dupora_engine.dll, sqlite3.dll, flutter_windows.dll, plugin DLLs, the full
+  `data\` asset tree) with Start Menu/Desktop shortcuts, an Add/Remove
+  Programs entry, and the Dupora icon - no source, build caches, or dev
+  tooling included.
+- Pivoted from Inno Setup to WiX, and from per-machine to per-user MSI
+  scope, both because this build environment has no administrator rights -
+  see BUILD.md's "Windows installer" section for the full detail and why
+  that doesn't compromise the installer's legitimacy (per-user installs to
+  `%LocalAppData%\Programs` are the same convention VS Code/Discord/Slack
+  use).
+- Verified for real in this environment: silent install (exit 0, all 24
+  files + both shortcuts + ARP entry present), the installed exe launched
+  and ran independently of `D:\DUPORA` (confirmed via its cache database
+  being created at the correct per-user path), and silent uninstall (exit
+  0, everything removed). Full detail in BUILD.md.
+- `dist/Dupora-Portable-x64.zip` (the same Release tree, zip-and-run,
+  independently verified the same way) and `dist/SHA256SUMS.txt` (installer,
+  MSI, portable ZIP, release APK) were also produced.
+
 ## [Unreleased] - 2026-08-11 - Production-readiness audit
 
 A dedicated audit pass: full repository review for unfinished/unsafe code,

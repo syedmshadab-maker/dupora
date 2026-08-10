@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <Package Name="Dupora"
+           Manufacturer="Dupora"
+           Version="1.0.0.0"
+           UpgradeCode="A5680DD9-7F90-4AED-9DA9-FA1F32D3E198"
+           Language="1033"
+           Compressed="yes"
+           Scope="perUser">
+
+    <SummaryInformation Description="Dupora - Duplicate File Finder and Cleaner" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Dupora is already installed." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <Icon Id="AppIcon.ico" SourceFile="$(var.RepoRoot)\branding\windows\dupora.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/dupora/dupora" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="Dir.Programs" Name="Programs">
+      <Directory Id="INSTALLFOLDER" Name="Dupora">
+        <Component Id="Comp.dupora.exe" Guid="*">
+          <File Id="File.dupora.exe" Source="$(var.ReleaseDir)\dupora.exe" KeyPath="yes" />
+        </Component>
+        <Component Id="Comp.dupora_engine.dll" Guid="*">
+          <File Id="File.dupora_engine.dll" Source="$(var.ReleaseDir)\dupora_engine.dll" KeyPath="yes" />
+        </Component>
+        <Component Id="Comp.file_selector_windows_plugin.dll" Guid="*">
+          <File Id="File.file_selector_windows_plugin.dll" Source="$(var.ReleaseDir)\file_selector_windows_plugin.dll" KeyPath="yes" />
+        </Component>
+        <Component Id="Comp.flutter_windows.dll" Guid="*">
+          <File Id="File.flutter_windows.dll" Source="$(var.ReleaseDir)\flutter_windows.dll" KeyPath="yes" />
+        </Component>
+        <Component Id="Comp.native_assets.json" Guid="*">
+          <File Id="File.native_assets.json" Source="$(var.ReleaseDir)\native_assets.json" KeyPath="yes" />
+        </Component>
+        <Component Id="Comp.sqlite3.dll" Guid="*">
+          <File Id="File.sqlite3.dll" Source="$(var.ReleaseDir)\sqlite3.dll" KeyPath="yes" />
+        </Component>
+        <Component Id="Comp.sqlite3_flutter_libs_plugin.dll" Guid="*">
+          <File Id="File.sqlite3_flutter_libs_plugin.dll" Source="$(var.ReleaseDir)\sqlite3_flutter_libs_plugin.dll" KeyPath="yes" />
+        </Component>
+
+        <Directory Id="Dir.data" Name="data">
+          <Component Id="Comp.app.so" Guid="*">
+            <File Id="File.app.so" Source="$(var.ReleaseDir)\data\app.so" KeyPath="yes" />
+          </Component>
+          <Component Id="Comp.icudtl.dat" Guid="*">
+            <File Id="File.icudtl.dat" Source="$(var.ReleaseDir)\data\icudtl.dat" KeyPath="yes" />
+          </Component>
+
+          <Directory Id="Dir.flutter_assets" Name="flutter_assets">
+            <Component Id="Comp.AssetManifest.bin" Guid="*">
+              <File Id="File.AssetManifest.bin" Source="$(var.ReleaseDir)\data\flutter_assets\AssetManifest.bin" KeyPath="yes" />
+            </Component>
+            <Component Id="Comp.FontManifest.json" Guid="*">
+              <File Id="File.FontManifest.json" Source="$(var.ReleaseDir)\data\flutter_assets\FontManifest.json" KeyPath="yes" />
+            </Component>
+            <Component Id="Comp.NOTICES.Z" Guid="*">
+              <File Id="File.NOTICES.Z" Source="$(var.ReleaseDir)\data\flutter_assets\NOTICES.Z" KeyPath="yes" />
+            </Component>
+            <Component Id="Comp.NativeAssetsManifest.json" Guid="*">
+              <File Id="File.NativeAssetsManifest.json" Source="$(var.ReleaseDir)\data\flutter_assets\NativeAssetsManifest.json" KeyPath="yes" />
+            </Component>
+
+            <Directory Id="Dir.fonts" Name="fonts">
+              <Component Id="Comp.MaterialIcons_Regular_otf" Guid="*">
+                <File Id="File.MaterialIcons_Regular.otf" Source="$(var.ReleaseDir)\data\flutter_assets\fonts\MaterialIcons-Regular.otf" KeyPath="yes" />
+              </Component>
+            </Directory>
+
+            <Directory Id="Dir.packages" Name="packages">
+              <Directory Id="Dir.cupertino_icons" Name="cupertino_icons">
+                <Directory Id="Dir.cupertino_assets" Name="assets">
+                  <Component Id="Comp.CupertinoIcons.ttf" Guid="*">
+                    <File Id="File.CupertinoIcons.ttf" Source="$(var.ReleaseDir)\data\flutter_assets\packages\cupertino_icons\assets\CupertinoIcons.ttf" KeyPath="yes" />
+                  </Component>
+                </Directory>
+              </Directory>
+            </Directory>
+
+            <Directory Id="Dir.shaders" Name="shaders">
+              <Component Id="Comp.ink_sparkle.frag" Guid="*">
+                <File Id="File.ink_sparkle.frag" Source="$(var.ReleaseDir)\data\flutter_assets\shaders\ink_sparkle.frag" KeyPath="yes" />
+              </Component>
+              <Component Id="Comp.stretch_effect.frag" Guid="*">
+                <File Id="File.stretch_effect.frag" Source="$(var.ReleaseDir)\data\flutter_assets\shaders\stretch_effect.frag" KeyPath="yes" />
+              </Component>
+            </Directory>
+          </Directory>
+        </Directory>
+      </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="Dupora">
+        <Component Id="Comp.StartMenuShortcut" Guid="*">
+          <Shortcut Id="StartMenuShortcut"
+                    Name="Dupora"
+                    Description="Find duplicates. Reclaim space."
+                    Target="[INSTALLFOLDER]dupora.exe"
+                    WorkingDirectory="INSTALLFOLDER"
+                    Icon="AppIcon.ico" />
+          <Shortcut Id="UninstallShortcut"
+                    Name="Uninstall Dupora"
+                    Target="[System64Folder]msiexec.exe"
+                    Arguments="/x [ProductCode]"
+                    Description="Uninstall Dupora" />
+          <RemoveFolder Id="RemoveApplicationProgramsFolder" On="uninstall" />
+          <RegistryValue Root="HKCU" Key="Software\Dupora" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="DesktopFolder">
+      <Component Id="Comp.DesktopShortcut" Guid="*">
+        <Shortcut Id="DesktopShortcut"
+                  Name="Dupora"
+                  Description="Find duplicates. Reclaim space."
+                  Target="[INSTALLFOLDER]dupora.exe"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="AppIcon.ico" />
+        <RegistryValue Root="HKCU" Key="Software\Dupora" Name="DesktopShortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </StandardDirectory>
+
+    <Feature Id="MainApplication" Title="Dupora" Level="1">
+      <ComponentRef Id="Comp.dupora.exe" />
+      <ComponentRef Id="Comp.dupora_engine.dll" />
+      <ComponentRef Id="Comp.file_selector_windows_plugin.dll" />
+      <ComponentRef Id="Comp.flutter_windows.dll" />
+      <ComponentRef Id="Comp.native_assets.json" />
+      <ComponentRef Id="Comp.sqlite3.dll" />
+      <ComponentRef Id="Comp.sqlite3_flutter_libs_plugin.dll" />
+      <ComponentRef Id="Comp.app.so" />
+      <ComponentRef Id="Comp.icudtl.dat" />
+      <ComponentRef Id="Comp.AssetManifest.bin" />
+      <ComponentRef Id="Comp.FontManifest.json" />
+      <ComponentRef Id="Comp.NOTICES.Z" />
+      <ComponentRef Id="Comp.NativeAssetsManifest.json" />
+      <ComponentRef Id="Comp.MaterialIcons_Regular_otf" />
+      <ComponentRef Id="Comp.CupertinoIcons.ttf" />
+      <ComponentRef Id="Comp.ink_sparkle.frag" />
+      <ComponentRef Id="Comp.stretch_effect.frag" />
+      <ComponentRef Id="Comp.StartMenuShortcut" />
+      <ComponentRef Id="Comp.DesktopShortcut" />
+    </Feature>
+
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.RepoRoot)\installer\license.rtf" />
+    <ui:WixUI Id="WixUI_InstallDir" />
+
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch Dupora" />
+    <Property Id="WixShellExecTarget" Value="[#File.dupora.exe]" />
+
+  </Package>
+</Wix>

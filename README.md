@@ -172,3 +172,9 @@ flutter build windows --release
 
 Requires the MSVC Build Tools ("Desktop development with C++" workload);
 see BUILD.md if `flutter doctor` reports Visual Studio as missing.
+
+A distributable Windows installer (`Dupora-Setup-x64-v1.0.0.exe`, built with
+WiX Toolset - not a self-extracting script) and a portable ZIP are built
+from that release output via `installer/dupora.wxs` and `installer/bundle.wxs`
+- see BUILD.md's "Windows installer" section for the exact commands and the
+real install/launch/uninstall verification performed against them.
