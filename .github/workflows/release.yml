@@ -409,12 +409,12 @@ jobs:
             verified (package identity, adaptive launcher icon, native engine
             library all confirmed present via \`aapt2\`). Not device/emulator
             runtime-tested by this pipeline.
-          - **macOS / Linux** - compiled on GitHub-hosted runners as a build
-            health check, but **not attached to this release**: the native
-            BLAKE3 engine library isn't yet wired into the packaged app bundle
-            for these two platforms (see BUILD.md), so a compiled artifact
-            would fail at runtime. Tracked as a known limitation, not shipped
-            until fixed.
+          - **macOS / Linux** - built on GitHub-hosted runners as a compile
+            health check only; **not attached to this release**. Linux
+            compiles but the native BLAKE3 engine library isn't yet bundled
+            into the packaged app; macOS currently fails to compile
+            (a Trash-deletion Swift file isn't registered in the Xcode
+            project). Both are tracked, known limitations - see BUILD.md.
 
           ### Installation
 

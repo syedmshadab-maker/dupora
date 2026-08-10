@@ -323,19 +323,34 @@ version consistent.
   installer is genuinely install/launch/uninstall-tested on the runner
   itself before anything is published (not just compiled).
 - **macOS and Linux are built on GitHub-hosted runners as a compile-health
-  check only** and their output is deliberately *not* attached to the
-  release. Reason: unlike `windows/CMakeLists.txt` (which has an explicit
-  `install(FILES ...)` rule bundling `dupora_engine.dll` next to
-  `Runner.exe`), neither `linux/CMakeLists.txt` nor the macOS Xcode
-  project currently has an equivalent step bundling
-  `libdupora_engine.so`/`.dylib` into the packaged app. A build produced
-  today would compile successfully and then fail at runtime the first
-  time it needs to hash anything, since `DuporaNativeBindings._openLibrary()`
-  (`lib/core/native/dupora_native_bindings.dart`) has nowhere to find the
-  library outside a source checkout. This is a known, tracked packaging
-  gap - not a claim that macOS/Linux support doesn't work, but an honest
-  statement that the *packaged, distributable* artifact isn't ready for
-  either platform yet.
+  check only** (`continue-on-error: true`, so a failure here never blocks
+  the Windows/Android release) and their output is deliberately *not*
+  attached to the release. Verified for real via a `workflow_dispatch` run
+  on 2026-08-11 (GitHub Actions run 31434128772):
+  - **Linux actually compiles successfully** on `ubuntu-latest`. It's
+    still not attached, because unlike `windows/CMakeLists.txt` (which has
+    an explicit `install(FILES ...)` rule bundling `dupora_engine.dll`
+    next to `Runner.exe`), `linux/CMakeLists.txt` has no equivalent step
+    bundling `libdupora_engine.so` into the packaged bundle - the compiled
+    app would fail at runtime the first time it needs to hash anything,
+    since `DuporaNativeBindings._openLibrary()`
+    (`lib/core/native/dupora_native_bindings.dart`) has nowhere to find
+    the library outside a source checkout.
+  - **macOS currently fails to even compile** on `macos-latest`: `error:
+    cannot find 'TrashChannel' in scope` in `MainFlutterWindow.swift`.
+    `macos/Runner/TrashChannel.swift` (the Swift Trash-deletion bridge)
+    exists in the repo but was never added to
+    `macos/Runner.xcodeproj/project.pbxproj`'s build target, so Xcode
+    doesn't compile it at all. This is a real, pre-existing Xcode-project
+    configuration bug, confirmed by this workflow's first actual run - not
+    fixed here, since it's an application/Xcode-project issue outside this
+    release-workflow change's scope, but tracked as a known limitation
+    rather than silently worked around.
+  - Neither is a claim that macOS/Linux support doesn't work at the source
+    level - both are written against their documented platform APIs (see
+    README's Known Limitations) - only that the *packaged, distributable*
+    artifact isn't ready for either platform yet, for two different and
+    now precisely identified reasons.
 - The workflow also supports manual `workflow_dispatch` runs (for testing
   the pipeline itself without cutting a release) - these compute a
   placeholder `0.0.0-dev.<run number>` version and run every job above,

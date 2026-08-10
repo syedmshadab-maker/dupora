@@ -35,9 +35,6 @@
         <Component Id="Comp.flutter_windows.dll" Guid="*">
           <File Id="File.flutter_windows.dll" Source="$(var.ReleaseDir)\flutter_windows.dll" KeyPath="yes" />
         </Component>
-        <Component Id="Comp.native_assets.json" Guid="*">
-          <File Id="File.native_assets.json" Source="$(var.ReleaseDir)\native_assets.json" KeyPath="yes" />
-        </Component>
         <Component Id="Comp.sqlite3.dll" Guid="*">
           <File Id="File.sqlite3.dll" Source="$(var.ReleaseDir)\sqlite3.dll" KeyPath="yes" />
         </Component>
@@ -134,7 +131,6 @@
       <ComponentRef Id="Comp.dupora_engine.dll" />
       <ComponentRef Id="Comp.file_selector_windows_plugin.dll" />
       <ComponentRef Id="Comp.flutter_windows.dll" />
-      <ComponentRef Id="Comp.native_assets.json" />
       <ComponentRef Id="Comp.sqlite3.dll" />
       <ComponentRef Id="Comp.sqlite3_flutter_libs_plugin.dll" />
       <ComponentRef Id="Comp.app.so" />
