@@ -63,22 +63,59 @@ throughput numerically, per the spec's "Create a benchmark suite" /
 "Compare: buffered BLAKE3 / mmap BLAKE3 / parallel BLAKE3") was scoped but
 not implemented in this pass - see Known Limitations.
 
-## What wasn't benchmarked on real hardware
+## Measured results (real, not estimated)
+
+`integration_test/stress_test.dart` runs the actual compiled Windows exe
+(not a mock, not the engine in isolation) against a generated dataset and
+prints real numbers. This is what was actually observed on this
+single-VM, no-HDD, no-multi-terabyte-dataset build machine - see "What
+wasn't measured" below for the honest boundary of what this does and
+doesn't demonstrate.
+
+**Dataset:** 5,000 files - 400 duplicate groups of 10 identical files each
+(4,000 files), plus 1,000 unique files. Files are small (a few hundred
+bytes each) - this stresses per-file/per-isolate dispatch overhead, not
+raw hashing throughput on large files (see `dataset_test.dart` for that:
+a 3 MiB pair correctly exercises the mmap path in well under a second).
+
+| Metric | Result |
+|---|---|
+| Dataset generation (5,000 files) | ~2.9s |
+| Cold scan, 5,000 files on disk / 4,000 hashed (1,000 unique-sized files correctly never hashed at all - Stage 1 filtering) | **44.0s wall clock (~91 files/sec average)** |
+| Correctness at this scale | 400/400 groups found exactly, 0 false positives, 0 false negatives, 0 errors |
+| Repeated scan of the same unchanged tree (fully cached) | **3.7s - 11.8x faster than the cold scan** |
+| Peak process memory during the cold scan (`ProcessInfo.currentRss`, measured from inside the running app) | baseline 259.6 MB → peak 333.6 MB (**+74.1 MB** for 5,000 files in flight) |
+| Mid-scan cancellation under this load | confirmed stops promptly |
+
+**Honest read of the 91 files/sec number:** this is measured, not
+hypothetical, and it is *not* a number to be proud of in isolation - for
+files this small, per-file overhead (isolate dispatch, native FFI call
+setup, SQLite cache round-trip) dominates over actual BLAKE3 compute time,
+which is genuinely fast (nanoseconds to microseconds for a few hundred
+bytes). A real-world dataset with a more typical size distribution
+(documents, photos, videos - KB to GB, not uniformly tiny) would see much
+higher effective throughput, since large-file hashing time would then
+dominate instead of per-file dispatch overhead - `dataset_test.dart`'s
+3 MiB pair hashes in a small fraction of a second, consistent with that.
+The 11.8x cache speedup is the number that matters most for real-world
+"scan the same folder again" usage, and it held up under load, not just
+in the cache's own unit tests.
+
+## What wasn't measured
 
 This build ran entirely on a single Windows development VM with no HDD, no
 USB 2.0 device, and no multi-terabyte dataset available to test against.
-The compiled Windows release executable was verified end-to-end at small
-scale (a handful of files) via `integration_test/app_test.dart` - see
-TESTING.md - which proves *functional correctness* of the real exe
-(scanning, hashing, deletion all genuinely work), but that test says
-nothing about throughput at scale. The following remain *design intentions
+The stress test above measures *thousands* of files, not the *millions*
+the spec's performance targets ultimately describe - per the explicit
+instruction not to claim multi-million-file performance without measuring
+it, that claim is not made here. The following remain *design intentions
 backed by correctness tests*, not measured performance claims:
 
-- Actual files/sec and MB/sec throughput at the 10,000 / 100,000 /
-  1,000,000-file scales the spec targets.
-- Real memory-usage profiling of a million-file scan (the architecture is
-  designed to avoid holding per-file heavy objects, per above, but this was
-  not profiled with a memory profiler against a real million-file tree).
+- Throughput at the 100,000 / 1,000,000-file scales.
+- Memory behavior at those scales (5,000 files measured +74MB; the
+  architecture is designed to avoid per-file heavy objects at any scale -
+  see "Bounded worker pool" above - but this wasn't verified beyond
+  5,000).
 - The 64 MiB / 4-core parallel-hashing thresholds were not tuned against
   measured data on spinning disks, USB drives, or varied CPU configurations
   - they encode the qualitative guidance in the spec ("do not blindly
@@ -86,7 +123,10 @@ backed by correctness tests*, not measured performance claims:
     than runtime-measured decisions.
 - Thumbnail generation throughput/memory ceiling under a results grid with
   thousands of entries.
+- Performance on spinning disks (HDD) or USB 2.0 - only the VM's own SSD
+  was available.
 
 Anyone taking this further in a real environment should start by running
-the app against a representative dataset with `--profile`/DevTools attached
-and validating (or retuning) the constants named above.
+`integration_test/stress_test.dart` with a larger `_totalFiles` value and a
+more realistic size distribution, with DevTools attached, and validating
+(or retuning) the constants named above against what's actually observed.

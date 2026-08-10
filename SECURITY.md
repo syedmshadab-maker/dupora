@@ -40,9 +40,16 @@ enforces, in order, immediately before every OS-level delete call:
    duplicate group can never be passed to delete, independent of whatever
    selection UI state produced the request.
 3. **Existence + identity re-check.** The file must still exist, and its
-   current on-disk size must still match what was recorded during the scan.
-   A file that changed size since the scan is refused rather than deleted -
-   it may no longer be the file the user reviewed.
+   current on-disk size *and modification time* must both still match what
+   was recorded during the scan. A file that changed either since the scan
+   is refused rather than deleted - it may no longer be the file the user
+   reviewed. (The mtime check closes a gap a size-only check leaves open:
+   a different file happening to replace the original at the same path
+   with the exact same byte count, but written at a different time, would
+   otherwise pass a size-only check. A full re-hash would be the only
+   fully airtight version of this guarantee; checking size+mtime is the
+   same cheap identity tuple the persistent cache already relies on for
+   its own validity, applied here too.)
 4. **Duplicate-request de-duplication.** A path already in flight or
    already processed in the same coordinator instance is rejected rather
    than deleted twice.
@@ -93,6 +100,17 @@ Every `extern "C"` function in `rust/src/ffi/` is wrapped in
 `std::panic::catch_unwind`: a Rust panic must never unwind across the FFI
 boundary (undefined behavior). A caught panic is mapped to
 `StatusCode::Unexpected` rather than propagating.
+
+This invariant was violated (and fixed) once: `dupora_stream_hasher_new`
+and `dupora_stream_hasher_abort` (the incremental hasher used for Android
+SAF-sourced files, `rust/src/ffi/stream_hasher.rs`) were not wrapped, and
+every hasher-registry access used a plain `.lock().unwrap()`. A panic
+while any *other* handle's lock was held would poison the mutex; the very
+next call to either unwrapped function would then panic too, unwinding
+across the FFI boundary. Fixed with a poison-recovering lock helper
+(`unwrap_or_else(|poisoned| poisoned.into_inner())`) plus `catch_unwind` on
+both functions, closing the gap for real rather than narrowing its
+likelihood.
 
 Native memory passed across the boundary (cancellation flags, progress
 counters, path buffers) is always caller-allocated and caller-freed

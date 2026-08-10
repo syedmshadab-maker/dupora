@@ -3,13 +3,15 @@
 ## Current status
 
 ```
-cargo test                                       24 / 24 passing   (rust/)
-flutter test                                      48 / 48 passing   (test/)
-flutter test integration_test/app_test.dart -d windows   2 / 2 passing   (real compiled exe)
-flutter analyze                                    0 issues
-cargo clippy                                         0 warnings (-D warnings)
-dart format                                          clean
-cargo fmt --check                                    clean
+cargo test                                                24 / 24 passing   (rust/)
+flutter test                                              61 / 61 passing   (test/)
+flutter test integration_test/app_test.dart -d windows      2 / 2 passing   (real compiled exe)
+flutter test integration_test/dataset_test.dart -d windows  1 / 1 passing   (real compiled exe)
+flutter test integration_test/stress_test.dart -d windows   1 / 1 passing   (real compiled exe)
+flutter analyze                                              0 issues
+cargo clippy                                                   0 warnings (-D warnings)
+dart format                                                    clean
+cargo fmt --check                                              clean
 ```
 
 Run everything yourself:
@@ -24,6 +26,11 @@ cd ..
 dart format --output=none --set-exit-if-changed lib test
 flutter analyze
 flutter test
+
+# Requires a Windows build environment (MSVC) - see BUILD.md:
+flutter test integration_test/app_test.dart -d windows
+flutter test integration_test/dataset_test.dart -d windows
+flutter test integration_test/stress_test.dart -d windows
 ```
 
 ## Rust (`rust/`)
@@ -106,7 +113,19 @@ convenience dependency.
 - `test/features/cache/hash_cache_repository_test.dart` - a real in-memory
   Drift/SQLite database (not mocked), covering cache-hit lookups and every
   invalidation trigger (size change, mtime change, device-ID mismatch,
-  algorithm-version bump) plus an explicit incremental-rescan simulation.
+  algorithm-version bump), an explicit incremental-rescan simulation, and
+  `pruneMissing` (deleted-file cache rows are removed when they fall under
+  a scanned root, and left alone when they don't).
+- `test/features/deletion/safe_delete_service_test.dart` - real temp files
+  on a real filesystem (not mocked) against a fake `PlatformDeleter`:
+  successful trash/permanent delete, the keep-file backstop, protected
+  locations, a file that no longer exists, a stale scan result whose
+  on-disk size no longer matches (refused), the same check for mtime alone
+  (a same-size replacement file at the same path - the exact "stale scan
+  result deletes a different/new file" scenario - closes a gap a
+  size-only check would have missed), duplicate-request rejection, and
+  that a genuine platform-delete failure allows a later retry rather than
+  permanently blocking the path.
 - `test/features/scanner/scan_engine_test.dart` (tagged `integration` in
   `dart_test.yaml`) - the **full pipeline** against real temporary files on
   disk and the real native engine (loaded from `rust/target/release/`):
@@ -189,6 +208,41 @@ uses Flutter's own `integration_test` package, which operates on the real
 widget tree from inside the running process itself. This is both more
 reliable and safer than OS-level UI automation would have been.
 
+### `integration_test/dataset_test.dart` - controlled real-world dataset
+
+Same real-compiled-app approach, against a purpose-built dataset covering
+every scenario in the release-audit checklist in one scan: identical files
+under different names, identical files in different subdirectories,
+same-size/different-content files, zero-byte files, a large (3 MiB) file
+pair (exercises the mmap hashing path, not just the small-file buffered
+path), and a genuinely `LockFileEx`-locked file (a mandatory lock on
+Windows, which reliably blocks even a different isolate in the same
+process from reading it - simulating a real "file in use by another
+program" condition). A second scan after adding a new file and unlocking
+the locked one confirms incremental-rescan/cache behavior end-to-end
+through the real UI, not just the engine's own unit tests.
+
+One real discovery while writing this test: a file with a size that
+doesn't match any other file in the dataset is never read at all - Stage 1
+filters it out before any hashing is attempted, by design. The first
+version of this test locked a file with a unique size and asserted it
+would produce a read-error; that assertion was wrong, not the app - the
+app correctly never attempted to read it. Fixed by giving the locked file
+a same-size sibling so it actually reaches an attempted (and blocked)
+read.
+
+### `integration_test/stress_test.dart` - scale, memory, cancellation under load
+
+5,000 generated files (400 duplicate groups of 10 + 1,000 unique),
+against the real compiled app. Verifies group-detection correctness at
+this scale (400/400 groups, exactly), measures and prints real wall-clock
+timing and real process memory (`ProcessInfo.currentRss`, sampled from
+inside the running app - not an external estimate), verifies a repeated
+scan of the same unchanged tree is meaningfully faster (cache effect
+holding up under load, not just in a small unit test), and verifies
+cancellation still takes effect promptly under this load. See
+PERFORMANCE.md for the actual numbers this produced.
+
 ## A hang bug this test suite caught
 
 `file_discovery.dart`'s `ReceivePort` never completes its own `Stream` -
@@ -202,6 +256,50 @@ raw `ReceivePort` from `runFileDiscovery`, breaking out of the loop
 explicitly on `DiscoveryDone`, and closing the port - see the "Bug fix"
 section of the corresponding commit and `TESTING.md`'s existence as a
 reminder that pure unit tests are not a substitute for end-to-end coverage.
+
+## Bugs found by the production-readiness audit
+
+A dedicated audit pass (full repository review + rerunning every test +
+new real-exe integration tests) found four real issues, all fixed:
+
+1. **FFI panic/undefined-behavior gap.** `dupora_stream_hasher_new`/`_abort`
+   (Android SAF hashing path) weren't wrapped in `catch_unwind`, unlike
+   every other `extern "C"` function in the crate, and all four call sites
+   used a plain `.lock().unwrap()`. A panic while any *other* handle's
+   lock was held would poison the mutex; the next call to either
+   unwrapped function would then panic again and unwind across the FFI
+   boundary - undefined behavior. Fixed with a poison-recovering lock
+   helper and `catch_unwind` on both functions.
+2. **Unhandled scan-failure exception.** `AppController.startScan()` had
+   no error handling around the engine call - any exception mid-scan
+   (database error, worker isolate failing to spawn, disk I/O failure)
+   would leave the UI stuck on the Scanning screen forever with no
+   recovery short of restarting the app. Now caught and surfaced via a
+   (new) dismissible error banner on the Home screen; also fixed a
+   related issue where `lastError` was already being captured for a
+   different failure case (storage-volume enumeration) but was never
+   actually displayed anywhere.
+3. **Weak pre-delete identity check.** `SafeDeleteCoordinator` only
+   checked file size before deleting - a same-size replacement file at
+   the same path (the "stale scan result deletes a different/new file"
+   scenario) would have slipped through. Now also checks mtime. This
+   path had zero dedicated test coverage before the audit; it has 9 tests
+   now (`safe_delete_service_test.dart`).
+4. **Unbounded stale-cache growth.** A cache row for a file deleted from
+   disk was never invalidated (nothing ever looks it up again by that
+   exact path), so it would sit in the database forever across repeated
+   scans of a tree with churn. Added `HashCacheRepository.pruneMissing`,
+   run once per scan right after discovery.
+
+Also investigated and found **not** to be a bug, despite looking
+suspicious at first: whether `HashWorkerPool.shutdown()`'s forced
+completion of pending jobs could free native memory (cancellation
+signal/progress counter) while a worker isolate was still touching it.
+Traced through the actual call sequencing - `ScanEngine.start()` always
+fully `await`s every `Future.wait` batch of submitted jobs before
+`shutdown()` ever runs in its `finally` block - and confirmed the forced-
+completion path is unreachable from the current call site, not silently
+racy.
 
 ## What's intentionally not covered
 

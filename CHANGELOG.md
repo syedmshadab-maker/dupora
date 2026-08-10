@@ -1,7 +1,70 @@
 # Changelog
 
-All notable changes to this project are documented here. This is the
-initial build, so everything below is v1.0.0.
+All notable changes to this project are documented here.
+
+## [Unreleased] - 2026-08-11 - Production-readiness audit
+
+A dedicated audit pass: full repository review for unfinished/unsafe code,
+rerunning the entire quality gate, completing the Windows release build
+(MSVC installed, real `flutter build windows --release`), and driving the
+actual compiled executable through `integration_test` rather than only
+testing the engine in isolation.
+
+### Fixed
+
+- **FFI panic/undefined-behavior gap** in the Android SAF incremental
+  hasher (`rust/src/ffi/stream_hasher.rs`): two of its four `extern "C"`
+  functions weren't wrapped in `catch_unwind` and could panic-and-unwind
+  across the FFI boundary after a lock-poisoning cascade. Fixed with a
+  poison-recovering lock plus consistent `catch_unwind` coverage.
+- **Unhandled scan-failure exception** could leave the UI stuck on the
+  Scanning screen forever with no recovery. `AppController.startScan()`
+  now catches and surfaces failures via a dismissible error banner; also
+  fixed `lastError` being captured for a different failure case but never
+  actually displayed anywhere.
+- **Weak pre-delete identity check**: `SafeDeleteCoordinator` checked file
+  size only; a same-size replacement file at the same path could have
+  slipped through. Now also checks modification time. Added 9 dedicated
+  tests for this previously-untested safety-critical path.
+- **Unbounded stale-cache growth**: cache rows for deleted files were
+  never pruned. Added `HashCacheRepository.pruneMissing`, run once per
+  scan after discovery.
+- Added a reentrancy guard against double-tapping "Start Scan."
+
+### Added
+
+- `integration_test/dataset_test.dart`: a controlled real-world dataset
+  (identical files under different names/directories, same-size-different-
+  content, zero-byte, a 3 MiB mmap-path pair, a genuinely locked/
+  inaccessible file, incremental rescan) run against the real compiled
+  Windows executable.
+- `integration_test/stress_test.dart`: 5,000 files / 400 duplicate groups
+  against the real exe, with real measured wall-clock timing, real process
+  memory (`ProcessInfo.currentRss`), a measured cache-speedup factor, and
+  cancellation under load - see PERFORMANCE.md for the numbers.
+- `test/features/deletion/safe_delete_service_test.dart` (9 tests) and
+  4 new `HashCacheRepository.pruneMissing` tests.
+
+### Verified (this pass)
+
+- Windows: MSVC Build Tools installed in this environment; `flutter build
+  windows --release` produces a working `dupora.exe` with
+  `dupora_engine.dll` bundled; driven end-to-end via `integration_test`
+  covering every item on the audit's Windows checklist (storage detection,
+  folder selection, scan, duplicate detection, BLAKE3, progress,
+  cancellation, cache, result grouping, smart selection, Recycle Bin
+  deletion) plus two full process restarts confirming
+  `dupora_cache.sqlite` persists correctly on disk.
+- Android: release APK builds cleanly; `aapt2 dump` confirms
+  `libdupora_engine.so`, the adaptive launcher icon
+  (`mipmap/ic_launcher{,_background,_foreground}`), and the
+  `com.dupora.dupora` package are all correctly present (resource names
+  are shrinker-obfuscated in release builds, which is expected - `aapt2`
+  resolves them properly regardless). No device/emulator was available in
+  this environment, so on-device runtime behavior remains unverified -
+  stated plainly, not claimed.
+- macOS/Linux: unchanged from the previous verification pass - code-
+  complete, host-unverified. No such hardware exists in this environment.
 
 ## [1.0.0] - 2026-08-10
 

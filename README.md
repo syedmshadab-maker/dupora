@@ -39,12 +39,12 @@ hardware and no Android device/emulator** available. Everything below is
 stated precisely rather than rounded up:
 
 **Windows: fully built and runtime-verified, including the actual
-production executable.**
+production executable, under a dedicated production-readiness audit.**
 - The full Rust engine: builds, 24/24 tests pass (including official
   BLAKE3 golden vectors), `cargo clippy -D warnings` clean, `cargo fmt
   --check` clean.
 - The full Dart application: `flutter analyze` clean, `dart format` clean,
-  48/48 tests pass, including an end-to-end pipeline test against real
+  61/61 tests pass, including an end-to-end pipeline test against real
   files on disk and the real compiled native engine (not mocked).
 - The MSVC Build Tools this environment initially lacked were installed
   directly (`vs_buildtools.exe --quiet --wait`, no admin token needed in
@@ -53,29 +53,49 @@ production executable.**
   `sqlite3.dll`, and all plugin DLLs confirmed bundled next to it by direct
   directory inspection.
 - **The compiled executable was launched and driven end-to-end** via
-  Flutter's `integration_test` package (`flutter test
-  integration_test/app_test.dart -d windows`), which runs against the real
-  running app's real widget tree rather than a mock: it added a real
-  folder, tapped the real "Start Scan" button, scanned with the real
-  BLAKE3 engine, correctly grouped two identical files while excluding an
-  unrelated one, applied smart selection, tapped the real delete button,
-  confirmed the real "Move to Trash?" dialog, and - verified directly
-  against the filesystem afterward - the duplicate was gone, the kept copy
-  and the unrelated file were untouched. A second test verified mid-scan
-  cancellation. Both passed. Full detail in TESTING.md.
+  Flutter's `integration_test` package (three separate test files - see
+  TESTING.md), which runs against the real running app's real widget tree
+  rather than a mock:
+  - `app_test.dart`: adds a folder, scans with the real BLAKE3 engine,
+    detects a duplicate, applies smart selection, deletes through the real
+    "Move to Trash?" dialog, and - verified directly against the
+    filesystem - the duplicate was gone while the kept copy and an
+    unrelated file survived. A second test verified mid-scan cancellation.
+  - `dataset_test.dart`: a controlled dataset covering every scenario in
+    the audit checklist in one real scan - identical files under different
+    names/directories, same-size-different-content, zero-byte files, a
+    3 MiB pair (mmap hashing path), and a genuinely `LockFileEx`-locked
+    file correctly reported as a scan error, not a crash - plus a rescan
+    proving incremental-cache behavior.
+  - `stress_test.dart`: 5,000 files / 400 duplicate groups, with real
+    measured wall-clock timing, real process memory
+    (`ProcessInfo.currentRss`), a measured cache-speedup factor, and
+    cancellation under load - see PERFORMANCE.md for the actual numbers.
+  - Also verified separately: the compiled exe survives two full process
+    restarts cleanly, with `dupora_cache.sqlite` persisting correctly on
+    disk across them.
 - Windows storage-volume detection (`GetLogicalDrives`/`GetDriveType`/
   `GetDiskFreeSpaceEx`) and Recycle Bin deletion (`SHFileOperationW`) are
-  exercised as part of that same real run.
+  exercised as part of these same real runs.
+- A dedicated audit pass found and fixed 4 real issues (an FFI panic/UB
+  gap, an unhandled scan-failure exception that could strand the UI, a
+  weak pre-delete identity check, and unbounded stale-cache growth) - see
+  CHANGELOG.md and TESTING.md's "Bugs found by the production-readiness
+  audit" for the specifics of each.
 
 **Android: cross-compiled and packaged for real; not device-tested.** The
 Rust engine was cross-compiled for `aarch64-linux-android` against NDK
 28.2.13676358, staged into `jniLibs`, and both `flutter build apk --debug`
-and `flutter build apk --release` succeeded (23.4 MB, R8-minified) -
-inspecting both APKs confirms `libdupora_engine.so` is bundled inside
-alongside Flutter's own native libraries. Kotlin (`StorageChannel.kt`,
-`SafChannel.kt`), Dart, and Rust all compile and package together
-correctly for a real Android target. What's *not* verified is runtime
-behavior on a physical device or emulator - see BUILD.md.
+and `flutter build apk --release` succeeded (23.4 MB, R8-minified).
+`aapt2 dump resources`/`badging` (not just a zip listing, which release
+builds' resource shrinking renames to opaque names) confirms
+`libdupora_engine.so`, the adaptive launcher icon
+(`mipmap/ic_launcher{,_background,_foreground}` across all densities), and
+the `com.dupora.dupora` package identity are all correctly present in the
+release APK. Kotlin (`StorageChannel.kt`, `SafChannel.kt`), Dart, and Rust
+all compile and package together correctly for a real Android target.
+What's *not* verified is runtime behavior on a physical device or
+emulator, and this is stated plainly rather than implied - see BUILD.md.
 
 **Code-complete, architecturally integrated, but not runtime-verified
 here** (see BUILD.md/TESTING.md for exactly why, per platform):
@@ -93,11 +113,12 @@ here** (see BUILD.md/TESTING.md for exactly why, per platform):
 - Video-frame and PDF-page thumbnails render a file-type icon instead of a
   decoded frame/page (no bundled ffmpeg/pdfium decoder); image thumbnails
   are fully real, decoded via the pure-Dart `image` package.
-- No dedicated `criterion` throughput benchmark harness, and the Windows
-  integration test above ran at small scale (a handful of files) to verify
-  correctness, not at the 10K/100K/1M-file scale the spec targets for
-  performance - see PERFORMANCE.md for what performance claims are and
-  aren't backed by measurement in this build.
+- No dedicated `criterion` throughput benchmark harness. The stress test
+  above measured 5,000 files (real numbers: ~91 files/sec cold, 11.8x
+  faster on a cached rescan, +74MB peak memory) - genuinely measured, but
+  still thousands, not the 100K/1M-file scale the spec's performance
+  targets describe. See PERFORMANCE.md for the full, honest breakdown of
+  what is and isn't backed by measurement in this build.
 
 None of the above is used to claim a false "it's done" - see each linked
 document for specifics, and CHANGELOG.md for the full list.
@@ -110,7 +131,7 @@ cd dupora
 cd rust && cargo build --release && cd ..
 flutter pub get
 dart run build_runner build --delete-conflicting-outputs
-flutter test              # 48/48 passing
+flutter test              # 61/61 passing
 flutter run -d windows    # requires MSVC Build Tools - see BUILD.md
 ```
 
