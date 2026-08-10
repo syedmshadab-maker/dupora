@@ -100,6 +100,16 @@ install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}
 install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
+# Dupora's Rust native engine (see rust/), built separately via
+# `cargo build --release` before this CMake configure/build step (see
+# BUILD.md). Bundled into bundle/lib/, alongside the plugin libraries
+# below; dupora_native_bindings.dart resolves it there explicitly at
+# runtime (relative to the running executable), rather than depending on
+# RPATH-based bare-name dlopen resolution.
+install(FILES "${PROJECT_SOURCE_DIR}/../rust/target/release/libdupora_engine.so"
+  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+  COMPONENT Runtime)
+
 foreach(bundled_library ${PLUGIN_BUNDLED_LIBRARIES})
   install(FILES "${bundled_library}"
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"

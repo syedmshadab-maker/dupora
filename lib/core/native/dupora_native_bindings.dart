@@ -140,7 +140,22 @@ class DuporaNativeBindings {
       candidates.add('$libraryBaseName.dll');
     } else if (Platform.isMacOS) {
       candidates.add('lib$libraryBaseName.dylib');
-    } else if (Platform.isLinux || Platform.isAndroid) {
+    } else if (Platform.isLinux) {
+      final fileName = 'lib$libraryBaseName.so';
+      candidates.add(fileName);
+      // The release bundle installs the engine at bundle/lib/ (see
+      // linux/CMakeLists.txt), next to bundle/dupora. Unlike Windows,
+      // where the default DLL search order always includes the
+      // executable's own directory, a bare dlopen(fileName) depends on
+      // RPATH/RUNPATH resolution semantics that aren't guaranteed for a
+      // plain runtime dlopen call made from inside the Dart VM (as opposed
+      // to a build-time-linked dependency of the executable itself, which
+      // is how the bundle's RPATH is actually exercised elsewhere). Resolve
+      // the bundle's lib/ directory explicitly, relative to the running
+      // executable, so loading doesn't depend on that ambiguity.
+      final exeDir = File(Platform.resolvedExecutable).parent.path;
+      candidates.add('$exeDir/lib/$fileName');
+    } else if (Platform.isAndroid) {
       candidates.add('lib$libraryBaseName.so');
     } else {
       throw UnsupportedError(
