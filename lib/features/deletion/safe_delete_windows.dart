@@ -24,11 +24,14 @@ class WindowsDeleter implements PlatformDeleter {
       opStruct.ref.wFunc = FO_DELETE;
       opStruct.ref.pFrom = pFrom;
       opStruct.ref.pTo = ffi.nullptr;
-      opStruct.ref.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI;
+      opStruct.ref.fFlags =
+          FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI;
 
       final result = SHFileOperation(opStruct);
       if (result != 0) {
-        throw StateError('SHFileOperationW failed with code 0x${result.toRadixString(16)}');
+        throw StateError(
+          'SHFileOperationW failed with code 0x${result.toRadixString(16)}',
+        );
       }
       if (opStruct.ref.fAnyOperationsAborted != 0) {
         throw StateError('Recycle Bin operation was aborted');

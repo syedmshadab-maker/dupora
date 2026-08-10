@@ -48,7 +48,10 @@ overlay / overlay rw 0 0
         sampleMounts,
         statFn: (path) async => (100000, 50000),
       );
-      expect(volumes.any((v) => v.rootPath == '/media/user/Backup Drive'), isTrue);
+      expect(
+        volumes.any((v) => v.rootPath == '/media/user/Backup Drive'),
+        isTrue,
+      );
     });
 
     test('classifies /media mounts as removable', () async {
@@ -56,7 +59,9 @@ overlay / overlay rw 0 0
         sampleMounts,
         statFn: (path) async => (100000, 50000),
       );
-      final removable = volumes.firstWhere((v) => v.rootPath == '/media/user/Backup Drive');
+      final removable = volumes.firstWhere(
+        (v) => v.rootPath == '/media/user/Backup Drive',
+      );
       expect(removable.type, VolumeType.removable);
     });
 

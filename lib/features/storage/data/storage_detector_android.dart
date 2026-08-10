@@ -15,7 +15,9 @@ class AndroidStorageDetector {
   static const MethodChannel _channel = MethodChannel('com.dupora/storage');
 
   Future<List<StorageVolume>> listVolumes() async {
-    final result = await _channel.invokeListMethod<Map<Object?, Object?>>('listVolumes');
+    final result = await _channel.invokeListMethod<Map<Object?, Object?>>(
+      'listVolumes',
+    );
     if (result == null) return const [];
     return result.map((m) {
       final isRemovable = m['isRemovable'] as bool? ?? false;

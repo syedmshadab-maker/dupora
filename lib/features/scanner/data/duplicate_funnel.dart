@@ -50,7 +50,9 @@ List<DuplicateGroup> groupByFullHashCandidates(
   final groups = <DuplicateGroup>[];
   byFull.forEach((hash, files) {
     if (files.length >= 2) {
-      groups.add(DuplicateGroup(fullHashHex: hash, fileSize: size, files: files));
+      groups.add(
+        DuplicateGroup(fullHashHex: hash, fileSize: size, files: files),
+      );
     }
   });
   return groups;

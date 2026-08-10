@@ -12,7 +12,11 @@ import 'domain/scan_progress.dart';
 import 'domain/scanned_file.dart';
 
 class ScanResult {
-  const ScanResult({required this.groups, required this.errors, required this.finalProgress});
+  const ScanResult({
+    required this.groups,
+    required this.errors,
+    required this.finalProgress,
+  });
   final List<DuplicateGroup> groups;
   final List<ScanError> errors;
   final ScanProgress finalProgress;
@@ -79,14 +83,19 @@ class ScanEngine {
     final cancel = _cancelSignal = CancelSignal.create();
     final hasher = NativeHasher();
     final pool = HashWorkerPool(
-      settings.maxConcurrency > 0 ? settings.maxConcurrency : hasher.recommendedWorkerCount(),
+      settings.maxConcurrency > 0
+          ? settings.maxConcurrency
+          : hasher.recommendedWorkerCount(),
     );
     await pool.start();
     _startProgressTicker();
 
     try {
       // --- Stage 0: discovery ---
-      _progress = _progress.copyWith(phase: ScanPhase.discovering, currentFile: null);
+      _progress = _progress.copyWith(
+        phase: ScanPhase.discovering,
+        currentFile: null,
+      );
       _emit(_progress);
 
       final files = <ScannedFile>[];
@@ -109,7 +118,9 @@ class ScanEngine {
             processedFiles: files.length,
             totalBytes: files.fold<int>(0, (a, f) => a + f.size),
             errorCount: _errors.length,
-            currentFile: event.files.isNotEmpty ? event.files.last.path : _progress.currentFile,
+            currentFile: event.files.isNotEmpty
+                ? event.files.last.path
+                : _progress.currentFile,
           );
           _emit(_progress);
         } else if (event is DiscoveryDone) {
@@ -151,29 +162,42 @@ class ScanEngine {
         await _waitIfPaused();
 
         final group = entry.value;
-        await Future.wait(group.map((file) async {
-          final cached = await _cache.lookup(file);
-          String hex;
-          if (cached?.partialHashHex != null) {
-            hex = cached!.partialHashHex!;
-          } else {
-            final result = await pool.submit(HashJob(
-              id: jobId++,
-              path: file.path,
-              kind: HashJobKind.partial,
-              fileSize: file.size,
-            ));
-            if (!result.isOk) {
-              _errors.add(ScanError(path: file.path, message: 'partial hash failed: ${result.status}', stage: 'stage2'));
-              return;
+        await Future.wait(
+          group.map((file) async {
+            final cached = await _cache.lookup(file);
+            String hex;
+            if (cached?.partialHashHex != null) {
+              hex = cached!.partialHashHex!;
+            } else {
+              final result = await pool.submit(
+                HashJob(
+                  id: jobId++,
+                  path: file.path,
+                  kind: HashJobKind.partial,
+                  fileSize: file.size,
+                ),
+              );
+              if (!result.isOk) {
+                _errors.add(
+                  ScanError(
+                    path: file.path,
+                    message: 'partial hash failed: ${result.status}',
+                    stage: 'stage2',
+                  ),
+                );
+                return;
+              }
+              hex = _hex(result.digest);
+              await _cache.storePartial(file, hex);
             }
-            hex = _hex(result.digest);
-            await _cache.storePartial(file, hex);
-          }
-          partialHashes[file.path] = hex;
-          stage2Done++;
-          _progress = _progress.copyWith(processedFiles: stage2Done, currentFile: file.path);
-        }));
+            partialHashes[file.path] = hex;
+            stage2Done++;
+            _progress = _progress.copyWith(
+              processedFiles: stage2Done,
+              currentFile: file.path,
+            );
+          }),
+        );
         _emit(_progress);
       }
 
@@ -191,7 +215,10 @@ class ScanEngine {
       final stage3Candidates = stage2Groups.values.expand((g) => g).toList();
 
       // --- Stage 3: full BLAKE3 ---
-      final stage3TotalBytes = stage3Candidates.fold<int>(0, (a, f) => a + f.size);
+      final stage3TotalBytes = stage3Candidates.fold<int>(
+        0,
+        (a, f) => a + f.size,
+      );
       _progress = _progress.copyWith(
         phase: ScanPhase.fullHashing,
         totalFiles: stage3Candidates.length,
@@ -208,42 +235,55 @@ class ScanEngine {
         await _waitIfPaused();
 
         final group = entry.value;
-        await Future.wait(group.map((file) async {
-          final cached = await _cache.lookup(file);
-          String hex;
-          if (cached?.fullHashHex != null) {
-            hex = cached!.fullHashHex!;
-            _completedStage3Bytes += file.size;
-          } else {
-            final progressCounter = NativeProgressCounter.create();
-            final id = jobId++;
-            _activeStage3Progress[id] = progressCounter;
-            final result = await pool.submit(HashJob(
-              id: id,
-              path: file.path,
-              kind: HashJobKind.full,
-              fileSize: file.size,
-              progressAddress: progressCounter.rawAddress,
-              cancelAddress: cancel.rawAddress,
-            ));
-            _activeStage3Progress.remove(id);
-            progressCounter.dispose();
+        await Future.wait(
+          group.map((file) async {
+            final cached = await _cache.lookup(file);
+            String hex;
+            if (cached?.fullHashHex != null) {
+              hex = cached!.fullHashHex!;
+              _completedStage3Bytes += file.size;
+            } else {
+              final progressCounter = NativeProgressCounter.create();
+              final id = jobId++;
+              _activeStage3Progress[id] = progressCounter;
+              final result = await pool.submit(
+                HashJob(
+                  id: id,
+                  path: file.path,
+                  kind: HashJobKind.full,
+                  fileSize: file.size,
+                  progressAddress: progressCounter.rawAddress,
+                  cancelAddress: cancel.rawAddress,
+                ),
+              );
+              _activeStage3Progress.remove(id);
+              progressCounter.dispose();
 
-            if (!result.isOk) {
-              if (result.status != NativeStatus.cancelled) {
-                _errors.add(ScanError(path: file.path, message: 'full hash failed: ${result.status}', stage: 'stage3'));
+              if (!result.isOk) {
+                if (result.status != NativeStatus.cancelled) {
+                  _errors.add(
+                    ScanError(
+                      path: file.path,
+                      message: 'full hash failed: ${result.status}',
+                      stage: 'stage3',
+                    ),
+                  );
+                }
+                return;
               }
-              return;
+              hex = _hex(result.digest);
+              final partialHex = partialHashes[file.path] ?? '';
+              await _cache.storeFull(file, partialHex, hex);
+              _completedStage3Bytes += file.size;
             }
-            hex = _hex(result.digest);
-            final partialHex = partialHashes[file.path] ?? '';
-            await _cache.storeFull(file, partialHex, hex);
-            _completedStage3Bytes += file.size;
-          }
-          fullHashes[file.path] = hex;
-          stage3Done++;
-          _progress = _progress.copyWith(processedFiles: stage3Done, currentFile: file.path);
-        }));
+            fullHashes[file.path] = hex;
+            stage3Done++;
+            _progress = _progress.copyWith(
+              processedFiles: stage3Done,
+              currentFile: file.path,
+            );
+          }),
+        );
       }
 
       if (cancel.isCancelled) return _finishCancelled(files.length);
@@ -252,14 +292,19 @@ class ScanEngine {
       final groups = <DuplicateGroup>[];
       for (final entry in stage2Groups.entries) {
         final size = int.parse(entry.key.split(':').first);
-        groups.addAll(groupByFullHashCandidates(
-          size,
-          entry.value,
-          (f) => fullHashes[f.path] ?? '',
-        ));
+        groups.addAll(
+          groupByFullHashCandidates(
+            size,
+            entry.value,
+            (f) => fullHashes[f.path] ?? '',
+          ),
+        );
       }
 
-      final duplicateFiles = groups.fold<int>(0, (a, g) => a + g.duplicateCount);
+      final duplicateFiles = groups.fold<int>(
+        0,
+        (a, g) => a + g.duplicateCount,
+      );
       final duplicateBytes = groups.fold<int>(0, (a, g) => a + g.wastedBytes);
 
       _progress = _progress.copyWith(
@@ -271,7 +316,11 @@ class ScanEngine {
       );
       _emit(_progress);
 
-      return ScanResult(groups: groups, errors: List.of(_errors), finalProgress: _progress);
+      return ScanResult(
+        groups: groups,
+        errors: List.of(_errors),
+        finalProgress: _progress,
+      );
     } finally {
       _progressTimer?.cancel();
       await pool.shutdown();
@@ -280,9 +329,17 @@ class ScanEngine {
   }
 
   ScanResult _finishCancelled(int filesSeen) {
-    _progress = _progress.copyWith(phase: ScanPhase.cancelled, isCancelled: true, currentFile: null);
+    _progress = _progress.copyWith(
+      phase: ScanPhase.cancelled,
+      isCancelled: true,
+      currentFile: null,
+    );
     _emit(_progress);
-    return ScanResult(groups: const [], errors: List.of(_errors), finalProgress: _progress);
+    return ScanResult(
+      groups: const [],
+      errors: List.of(_errors),
+      finalProgress: _progress,
+    );
   }
 
   void _startProgressTicker() {
@@ -290,14 +347,22 @@ class ScanEngine {
     _bytesAtLastSample = 0;
     _filesAtLastSample = 0;
     _progressTimer = Timer.periodic(const Duration(milliseconds: 250), (_) {
-      final liveBytes = _completedStage3Bytes +
-          _activeStage3Progress.values.fold<int>(0, (a, c) => a + c.bytesProcessed);
+      final liveBytes =
+          _completedStage3Bytes +
+          _activeStage3Progress.values.fold<int>(
+            0,
+            (a, c) => a + c.bytesProcessed,
+          );
       final now = DateTime.now();
       final elapsed = now.difference(_lastRateSample).inMilliseconds / 1000.0;
       if (elapsed > 0) {
         final bytesPerSecond = (liveBytes - _bytesAtLastSample) / elapsed;
-        final filesPerSecond = (_progress.processedFiles - _filesAtLastSample) / elapsed;
-        final remainingBytes = (_progress.totalBytes - liveBytes).clamp(0, double.infinity);
+        final filesPerSecond =
+            (_progress.processedFiles - _filesAtLastSample) / elapsed;
+        final remainingBytes = (_progress.totalBytes - liveBytes).clamp(
+          0,
+          double.infinity,
+        );
         final eta = bytesPerSecond > 1
             ? Duration(seconds: (remainingBytes / bytesPerSecond).round())
             : null;
@@ -325,5 +390,6 @@ class ScanEngine {
     _progressController.close();
   }
 
-  static String _hex(List<int> bytes) => bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  static String _hex(List<int> bytes) =>
+      bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
 }

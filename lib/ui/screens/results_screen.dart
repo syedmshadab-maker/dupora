@@ -25,17 +25,32 @@ class ResultsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Duplicates'),
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: controller.backToHome),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: controller.backToHome,
+        ),
         actions: [
           PopupMenuButton<SmartSelectionStrategy>(
             tooltip: 'Smart selection',
             icon: const Icon(Icons.auto_fix_high_outlined),
             onSelected: controller.applyStrategyToAllGroups,
             itemBuilder: (context) => const [
-              PopupMenuItem(value: SmartSelectionStrategy.keepOldest, child: Text('Keep oldest')),
-              PopupMenuItem(value: SmartSelectionStrategy.keepNewest, child: Text('Keep newest')),
-              PopupMenuItem(value: SmartSelectionStrategy.keepShortestPath, child: Text('Keep shortest path')),
-              PopupMenuItem(value: SmartSelectionStrategy.keepFirst, child: Text('Keep first')),
+              PopupMenuItem(
+                value: SmartSelectionStrategy.keepOldest,
+                child: Text('Keep oldest'),
+              ),
+              PopupMenuItem(
+                value: SmartSelectionStrategy.keepNewest,
+                child: Text('Keep newest'),
+              ),
+              PopupMenuItem(
+                value: SmartSelectionStrategy.keepShortestPath,
+                child: Text('Keep shortest path'),
+              ),
+              PopupMenuItem(
+                value: SmartSelectionStrategy.keepFirst,
+                child: Text('Keep first'),
+              ),
             ],
           ),
           const SizedBox(width: 8),
@@ -54,7 +69,8 @@ class ResultsScreen extends StatelessWidget {
                 Expanded(
                   child: ListView.builder(
                     itemCount: groups.length,
-                    itemBuilder: (context, index) => _GroupTile(group: groups[index]),
+                    itemBuilder: (context, index) =>
+                        _GroupTile(group: groups[index]),
                   ),
                 ),
               ],
@@ -65,22 +81,33 @@ class ResultsScreen extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                 child: FilledButton.icon(
-                  onPressed: controller.selectedCount == 0 ? null : () => _confirmAndDelete(context, controller),
-                  icon: Icon(controller.deleteCoordinator.usesTrash ? Icons.delete_outline : Icons.delete_forever),
+                  onPressed: controller.selectedCount == 0
+                      ? null
+                      : () => _confirmAndDelete(context, controller),
+                  icon: Icon(
+                    controller.deleteCoordinator.usesTrash
+                        ? Icons.delete_outline
+                        : Icons.delete_forever,
+                  ),
                   label: Text(
                     controller.selectedCount == 0
                         ? 'Select duplicates to remove'
                         : '${controller.deleteCoordinator.usesTrash ? "Move" : "Permanently delete"} '
-                            '${controller.selectedCount} files (${formatBytes(controller.selectedBytes)})',
+                              '${controller.selectedCount} files (${formatBytes(controller.selectedBytes)})',
                   ),
-                  style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
                 ),
               ),
             ),
     );
   }
 
-  Future<void> _confirmAndDelete(BuildContext context, AppController controller) async {
+  Future<void> _confirmAndDelete(
+    BuildContext context,
+    AppController controller,
+  ) async {
     final usesTrash = controller.deleteCoordinator.usesTrash;
     final confirmed = await showDialog<bool>(
       context: context,
@@ -89,16 +116,23 @@ class ResultsScreen extends StatelessWidget {
         content: Text(
           usesTrash
               ? 'This will move ${controller.selectedCount} files '
-                  '(${formatBytes(controller.selectedBytes)}) to the Recycle Bin / Trash. You can restore them from there.'
+                    '(${formatBytes(controller.selectedBytes)}) to the Recycle Bin / Trash. You can restore them from there.'
               : 'This platform has no Trash for these files. '
-                  '${controller.selectedCount} files (${formatBytes(controller.selectedBytes)}) '
-                  'will be PERMANENTLY deleted and cannot be recovered.',
+                    '${controller.selectedCount} files (${formatBytes(controller.selectedBytes)}) '
+                    'will be PERMANENTLY deleted and cannot be recovered.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            style: usesTrash ? null : FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            style: usesTrash
+                ? null
+                : FilledButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.error,
+                  ),
             child: Text(usesTrash ? 'Move to Trash' : 'Delete Permanently'),
           ),
         ],
@@ -149,17 +183,28 @@ class _SummaryBar extends StatelessWidget {
           _summaryItem(context, '$groupCount', 'duplicate groups'),
           _summaryItem(context, '$duplicateFiles', 'duplicate files'),
           _summaryItem(context, formatBytes(wastedBytes), 'reclaimable'),
-          if (errorCount > 0) _summaryItem(context, '$errorCount', 'errors', color: scheme.error),
+          if (errorCount > 0)
+            _summaryItem(context, '$errorCount', 'errors', color: scheme.error),
         ],
       ),
     );
   }
 
-  Widget _summaryItem(BuildContext context, String value, String label, {Color? color}) {
+  Widget _summaryItem(
+    BuildContext context,
+    String value,
+    String label, {
+    Color? color,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(value, style: Theme.of(context).textTheme.titleMedium?.copyWith(color: color)),
+        Text(
+          value,
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(color: color),
+        ),
         Text(label, style: Theme.of(context).textTheme.bodySmall),
       ],
     );
@@ -176,12 +221,22 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.check_circle_outline, size: 56, color: Theme.of(context).colorScheme.primary),
+          Icon(
+            Icons.check_circle_outline,
+            size: 56,
+            color: Theme.of(context).colorScheme.primary,
+          ),
           const SizedBox(height: 16),
-          Text('No exact duplicates found', style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'No exact duplicates found',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           if (errors > 0) ...[
             const SizedBox(height: 8),
-            Text('$errors files could not be read during the scan.', style: Theme.of(context).textTheme.bodySmall),
+            Text(
+              '$errors files could not be read during the scan.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           ],
         ],
       ),
@@ -211,7 +266,8 @@ class _GroupTile extends StatelessWidget {
         '${formatBytes(group.wastedBytes)} reclaimable',
       ),
       children: [
-        for (final file in group.files) _FileRow(file: file, keep: keep, group: group),
+        for (final file in group.files)
+          _FileRow(file: file, keep: keep, group: group),
       ],
     );
   }
@@ -232,8 +288,17 @@ class _FileRow extends StatelessWidget {
     return ListTile(
       contentPadding: const EdgeInsets.only(left: 32, right: 16),
       leading: isKeep
-          ? Tooltip(message: 'Kept copy', child: Icon(Icons.star, color: Theme.of(context).colorScheme.primary))
-          : Checkbox(value: selected, onChanged: (_) => controller.toggleFileSelected(file, keep)),
+          ? Tooltip(
+              message: 'Kept copy',
+              child: Icon(
+                Icons.star,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            )
+          : Checkbox(
+              value: selected,
+              onChanged: (_) => controller.toggleFileSelected(file, keep),
+            ),
       title: Text(file.path, overflow: TextOverflow.ellipsis),
       subtitle: Text(_formatDate(file.modifiedAt)),
       trailing: isKeep

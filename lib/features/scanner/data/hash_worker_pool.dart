@@ -26,7 +26,11 @@ class HashJob {
 }
 
 class HashJobResult {
-  const HashJobResult({required this.id, required this.status, required this.digest});
+  const HashJobResult({
+    required this.id,
+    required this.status,
+    required this.digest,
+  });
   final int id;
   final NativeStatus status;
   final Uint8List digest;
@@ -92,7 +96,13 @@ class HashWorkerPool {
     _workers.clear();
     for (final completer in _pending.values) {
       if (!completer.isCompleted) {
-        completer.complete(HashJobResult(id: -1, status: NativeStatus.cancelled, digest: Uint8List(0)));
+        completer.complete(
+          HashJobResult(
+            id: -1,
+            status: NativeStatus.cancelled,
+            digest: Uint8List(0),
+          ),
+        );
       }
     }
     _pending.clear();
@@ -107,7 +117,9 @@ class _Worker {
   final Isolate _isolate;
   bool isFree = true;
 
-  static Future<_Worker> spawn(void Function(_Worker, HashJobResult) onResult) async {
+  static Future<_Worker> spawn(
+    void Function(_Worker, HashJobResult) onResult,
+  ) async {
     final initPort = ReceivePort();
     final handshake = Completer<SendPort>();
     var gotHandshake = false;
@@ -151,14 +163,19 @@ void _workerMain(SendPort mainSendPort) {
 
   receivePort.listen((message) {
     final job = message as HashJob;
-    final progress =
-        job.progressAddress == 0 ? null : NativeProgressCounter.fromRawAddress(job.progressAddress);
-    final cancel = job.cancelAddress == 0 ? null : CancelSignal.fromRawAddress(job.cancelAddress);
+    final progress = job.progressAddress == 0
+        ? null
+        : NativeProgressCounter.fromRawAddress(job.progressAddress);
+    final cancel = job.cancelAddress == 0
+        ? null
+        : CancelSignal.fromRawAddress(job.cancelAddress);
 
     final outcome = job.kind == HashJobKind.partial
         ? hasher.partialFingerprint(job.path, job.fileSize)
         : hasher.hashFileFull(job.path, progress: progress, cancel: cancel);
 
-    mainSendPort.send(HashJobResult(id: job.id, status: outcome.status, digest: outcome.digest));
+    mainSendPort.send(
+      HashJobResult(id: job.id, status: outcome.status, digest: outcome.digest),
+    );
   });
 }

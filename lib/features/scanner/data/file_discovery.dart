@@ -31,7 +31,11 @@ class DiscoveryBatch {
 }
 
 class DiscoveryDone {
-  const DiscoveryDone({required this.totalFiles, required this.totalBytes, required this.cancelled});
+  const DiscoveryDone({
+    required this.totalFiles,
+    required this.totalBytes,
+    required this.cancelled,
+  });
   final int totalFiles;
   final int totalBytes;
   final bool cancelled;
@@ -90,7 +94,9 @@ void _discoveryIsolateMain(_DiscoveryInit init) {
 
   void flush() {
     if (pendingFiles.isEmpty && pendingErrors.isEmpty) return;
-    init.sendPort.send(DiscoveryBatch(List.of(pendingFiles), List.of(pendingErrors)));
+    init.sendPort.send(
+      DiscoveryBatch(List.of(pendingFiles), List.of(pendingErrors)),
+    );
     pendingFiles.clear();
     pendingErrors.clear();
   }
@@ -106,10 +112,14 @@ void _discoveryIsolateMain(_DiscoveryInit init) {
     try {
       entries = Directory(dirPath).listSync(followLinks: false);
     } on FileSystemException catch (e) {
-      pendingErrors.add(ScanError(path: dirPath, message: e.message, stage: 'discovery'));
+      pendingErrors.add(
+        ScanError(path: dirPath, message: e.message, stage: 'discovery'),
+      );
       return;
     } catch (e) {
-      pendingErrors.add(ScanError(path: dirPath, message: e.toString(), stage: 'discovery'));
+      pendingErrors.add(
+        ScanError(path: dirPath, message: e.toString(), stage: 'discovery'),
+      );
       return;
     }
 
@@ -124,7 +134,13 @@ void _discoveryIsolateMain(_DiscoveryInit init) {
       try {
         type = FileSystemEntity.typeSync(entity.path, followLinks: false);
       } catch (e) {
-        pendingErrors.add(ScanError(path: entity.path, message: e.toString(), stage: 'discovery'));
+        pendingErrors.add(
+          ScanError(
+            path: entity.path,
+            message: e.toString(),
+            stage: 'discovery',
+          ),
+        );
         continue;
       }
 
@@ -156,7 +172,13 @@ void _discoveryIsolateMain(_DiscoveryInit init) {
       try {
         stat = entity.statSync();
       } catch (e) {
-        pendingErrors.add(ScanError(path: entity.path, message: e.toString(), stage: 'discovery'));
+        pendingErrors.add(
+          ScanError(
+            path: entity.path,
+            message: e.toString(),
+            stage: 'discovery',
+          ),
+        );
         continue;
       }
 
@@ -205,13 +227,27 @@ void _discoveryIsolateMain(_DiscoveryInit init) {
         totalFiles++;
         totalBytes += stat.size;
       } catch (e) {
-        pendingErrors.add(ScanError(path: root, message: e.toString(), stage: 'discovery'));
+        pendingErrors.add(
+          ScanError(path: root, message: e.toString(), stage: 'discovery'),
+        );
       }
     } else {
-      pendingErrors.add(ScanError(path: root, message: 'not found or inaccessible', stage: 'discovery'));
+      pendingErrors.add(
+        ScanError(
+          path: root,
+          message: 'not found or inaccessible',
+          stage: 'discovery',
+        ),
+      );
     }
   }
 
   flush();
-  init.sendPort.send(DiscoveryDone(totalFiles: totalFiles, totalBytes: totalBytes, cancelled: cancelled));
+  init.sendPort.send(
+    DiscoveryDone(
+      totalFiles: totalFiles,
+      totalBytes: totalBytes,
+      cancelled: cancelled,
+    ),
+  );
 }

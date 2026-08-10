@@ -25,24 +25,33 @@ class HashCacheRepository {
   final HashCacheDatabase _db;
 
   Future<CachedHashes?> lookup(ScannedFile file) async {
-    final row = await (_db.select(_db.hashCacheEntries)..where((t) => t.path.equals(file.path)))
-        .getSingleOrNull();
+    final row = await (_db.select(
+      _db.hashCacheEntries,
+    )..where((t) => t.path.equals(file.path))).getSingleOrNull();
     if (row == null) return null;
 
-    final identityMatches = row.size == file.size &&
+    final identityMatches =
+        row.size == file.size &&
         row.modifiedMillis == file.modifiedAt.millisecondsSinceEpoch &&
         row.algoVersion == kHashAlgoVersion &&
-        (row.deviceId == null || file.deviceId == null || row.deviceId == file.deviceId);
+        (row.deviceId == null ||
+            file.deviceId == null ||
+            row.deviceId == file.deviceId);
 
     if (!identityMatches) {
       await invalidate(file.path);
       return null;
     }
-    return CachedHashes(partialHashHex: row.partialHash, fullHashHex: row.fullHash);
+    return CachedHashes(
+      partialHashHex: row.partialHash,
+      fullHashHex: row.fullHash,
+    );
   }
 
   Future<void> storePartial(ScannedFile file, String partialHex) async {
-    await _db.into(_db.hashCacheEntries).insertOnConflictUpdate(
+    await _db
+        .into(_db.hashCacheEntries)
+        .insertOnConflictUpdate(
           HashCacheEntriesCompanion.insert(
             path: file.path,
             size: file.size,
@@ -54,8 +63,14 @@ class HashCacheRepository {
         );
   }
 
-  Future<void> storeFull(ScannedFile file, String partialHex, String fullHex) async {
-    await _db.into(_db.hashCacheEntries).insertOnConflictUpdate(
+  Future<void> storeFull(
+    ScannedFile file,
+    String partialHex,
+    String fullHex,
+  ) async {
+    await _db
+        .into(_db.hashCacheEntries)
+        .insertOnConflictUpdate(
           HashCacheEntriesCompanion.insert(
             path: file.path,
             size: file.size,
@@ -69,7 +84,9 @@ class HashCacheRepository {
   }
 
   Future<void> invalidate(String path) async {
-    await (_db.delete(_db.hashCacheEntries)..where((t) => t.path.equals(path))).go();
+    await (_db.delete(
+      _db.hashCacheEntries,
+    )..where((t) => t.path.equals(path))).go();
   }
 
   Future<int> entryCount() async {

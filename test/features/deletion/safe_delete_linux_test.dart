@@ -8,7 +8,10 @@ void main() {
         originalPath: '/home/user/Documents/report.pdf',
         deletionDate: DateTime(2024, 3, 5, 9, 7, 2),
       );
-      expect(info, '[Trash Info]\nPath=/home/user/Documents/report.pdf\nDeletionDate=2024-03-05T09:07:02\n');
+      expect(
+        info,
+        '[Trash Info]\nPath=/home/user/Documents/report.pdf\nDeletionDate=2024-03-05T09:07:02\n',
+      );
     });
 
     test('percent-encodes special characters in the path', () {

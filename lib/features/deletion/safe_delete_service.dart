@@ -23,7 +23,9 @@ class DeleteResult {
   final DeleteOutcome outcome;
   final String? error;
 
-  bool get succeeded => outcome == DeleteOutcome.movedToTrash || outcome == DeleteOutcome.permanentlyDeleted;
+  bool get succeeded =>
+      outcome == DeleteOutcome.movedToTrash ||
+      outcome == DeleteOutcome.permanentlyDeleted;
 }
 
 /// Low-level, per-platform delete execution. Never call this directly for
@@ -68,11 +70,18 @@ class SafeDeleteCoordinator {
   /// longer matches what was recorded when duplicates were computed
   /// (someone modified it since the scan - deleting it now would not be
   /// deleting the file the user reviewed).
-  Future<DeleteResult> delete(ScannedFile file, {ScannedFile? mustNotEqual}) async {
+  Future<DeleteResult> delete(
+    ScannedFile file, {
+    ScannedFile? mustNotEqual,
+  }) async {
     final path = file.path;
 
     if (mustNotEqual != null && mustNotEqual.path == path) {
-      return DeleteResult(path, DeleteOutcome.skippedProtected, error: 'refused: this is the file marked to keep');
+      return DeleteResult(
+        path,
+        DeleteOutcome.skippedProtected,
+        error: 'refused: this is the file marked to keep',
+      );
     }
     if (protectedLocations.isProtected(path)) {
       return DeleteResult(path, DeleteOutcome.skippedProtected);
@@ -91,19 +100,28 @@ class SafeDeleteCoordinator {
         return DeleteResult(
           path,
           DeleteOutcome.identityMismatch,
-          error: 'size changed since scan ($currentSize != ${file.size}); refusing to delete',
+          error:
+              'size changed since scan ($currentSize != ${file.size}); refusing to delete',
         );
       }
 
       await _deleter.deleteFile(path);
-      return DeleteResult(path, _deleter.hasTrash ? DeleteOutcome.movedToTrash : DeleteOutcome.permanentlyDeleted);
+      return DeleteResult(
+        path,
+        _deleter.hasTrash
+            ? DeleteOutcome.movedToTrash
+            : DeleteOutcome.permanentlyDeleted,
+      );
     } catch (e) {
       _inFlightOrDone.remove(path); // allow a retry after a genuine failure
       return DeleteResult(path, DeleteOutcome.failed, error: e.toString());
     }
   }
 
-  Future<List<DeleteResult>> deleteAll(List<ScannedFile> files, {ScannedFile? mustNotEqual}) async {
+  Future<List<DeleteResult>> deleteAll(
+    List<ScannedFile> files, {
+    ScannedFile? mustNotEqual,
+  }) async {
     final results = <DeleteResult>[];
     for (final file in files) {
       results.add(await delete(file, mustNotEqual: mustNotEqual));

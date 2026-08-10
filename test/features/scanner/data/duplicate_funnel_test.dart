@@ -3,7 +3,13 @@ import 'package:dupora/features/scanner/domain/scanned_file.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 ScannedFile _file(String path, int size, {DateTime? modified}) {
-  return ScannedFile(path: path, name: path, extension: '', size: size, modifiedAt: modified ?? DateTime(2024));
+  return ScannedFile(
+    path: path,
+    name: path,
+    extension: '',
+    size: size,
+    modifiedAt: modified ?? DateTime(2024),
+  );
 }
 
 void main() {
@@ -42,7 +48,11 @@ void main() {
     test('only files sharing size AND full hash become a DuplicateGroup', () {
       final files = [_file('a', 100), _file('b', 100), _file('c', 100)];
       final full = {'a': 'full1', 'b': 'full1', 'c': 'full2'};
-      final groups = groupByFullHashCandidates(100, files, (f) => full[f.path]!);
+      final groups = groupByFullHashCandidates(
+        100,
+        files,
+        (f) => full[f.path]!,
+      );
       expect(groups, hasLength(1));
       expect(groups.first.fileSize, 100);
       expect(groups.first.files.map((f) => f.path), containsAll(['a', 'b']));
@@ -51,7 +61,11 @@ void main() {
     test('same size + different partial-derived full hash never merges', () {
       final files = [_file('a', 100), _file('b', 100)];
       final full = {'a': 'full1', 'b': 'full2'};
-      final groups = groupByFullHashCandidates(100, files, (f) => full[f.path]!);
+      final groups = groupByFullHashCandidates(
+        100,
+        files,
+        (f) => full[f.path]!,
+      );
       expect(groups, isEmpty);
     });
   });

@@ -45,27 +45,30 @@ class DuporaSettings {
       scanSystemFiles: scanSystemFiles ?? this.scanSystemFiles,
       followSymlinks: followSymlinks ?? this.followSymlinks,
       maxConcurrency: maxConcurrency ?? this.maxConcurrency,
-      thumbnailCacheMaxBytes: thumbnailCacheMaxBytes ?? this.thumbnailCacheMaxBytes,
+      thumbnailCacheMaxBytes:
+          thumbnailCacheMaxBytes ?? this.thumbnailCacheMaxBytes,
       confirmBeforeDelete: confirmBeforeDelete ?? this.confirmBeforeDelete,
       useTrash: useTrash ?? this.useTrash,
-      defaultSelectionStrategy: defaultSelectionStrategy ?? this.defaultSelectionStrategy,
-      userProtectedLocations: userProtectedLocations ?? this.userProtectedLocations,
+      defaultSelectionStrategy:
+          defaultSelectionStrategy ?? this.defaultSelectionStrategy,
+      userProtectedLocations:
+          userProtectedLocations ?? this.userProtectedLocations,
       themeMode: themeMode ?? this.themeMode,
     );
   }
 
   Map<String, Object?> toJson() => {
-        'scanHiddenFiles': scanHiddenFiles,
-        'scanSystemFiles': scanSystemFiles,
-        'followSymlinks': followSymlinks,
-        'maxConcurrency': maxConcurrency,
-        'thumbnailCacheMaxBytes': thumbnailCacheMaxBytes,
-        'confirmBeforeDelete': confirmBeforeDelete,
-        'useTrash': useTrash,
-        'defaultSelectionStrategy': defaultSelectionStrategy.name,
-        'userProtectedLocations': userProtectedLocations,
-        'themeMode': themeMode.name,
-      };
+    'scanHiddenFiles': scanHiddenFiles,
+    'scanSystemFiles': scanSystemFiles,
+    'followSymlinks': followSymlinks,
+    'maxConcurrency': maxConcurrency,
+    'thumbnailCacheMaxBytes': thumbnailCacheMaxBytes,
+    'confirmBeforeDelete': confirmBeforeDelete,
+    'useTrash': useTrash,
+    'defaultSelectionStrategy': defaultSelectionStrategy.name,
+    'userProtectedLocations': userProtectedLocations,
+    'themeMode': themeMode.name,
+  };
 
   factory DuporaSettings.fromJson(Map<String, Object?> json) {
     return DuporaSettings(
@@ -73,14 +76,16 @@ class DuporaSettings {
       scanSystemFiles: json['scanSystemFiles'] as bool? ?? false,
       followSymlinks: json['followSymlinks'] as bool? ?? false,
       maxConcurrency: json['maxConcurrency'] as int? ?? 0,
-      thumbnailCacheMaxBytes: json['thumbnailCacheMaxBytes'] as int? ?? 512 * 1024 * 1024,
+      thumbnailCacheMaxBytes:
+          json['thumbnailCacheMaxBytes'] as int? ?? 512 * 1024 * 1024,
       confirmBeforeDelete: json['confirmBeforeDelete'] as bool? ?? true,
       useTrash: json['useTrash'] as bool? ?? true,
       defaultSelectionStrategy: SmartSelectionStrategy.values.firstWhere(
         (s) => s.name == json['defaultSelectionStrategy'],
         orElse: () => SmartSelectionStrategy.keepOldest,
       ),
-      userProtectedLocations: (json['userProtectedLocations'] as List?)?.cast<String>() ?? const [],
+      userProtectedLocations:
+          (json['userProtectedLocations'] as List?)?.cast<String>() ?? const [],
       themeMode: DuporaThemeMode.values.firstWhere(
         (m) => m.name == json['themeMode'],
         orElse: () => DuporaThemeMode.system,

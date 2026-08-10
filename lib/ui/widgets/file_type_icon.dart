@@ -85,7 +85,11 @@ class FileThumbnail extends StatelessWidget {
         color: colorForCategory(category, scheme).withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Icon(iconForCategory(category), size: size * 0.55, color: colorForCategory(category, scheme)),
+      child: Icon(
+        iconForCategory(category),
+        size: size * 0.55,
+        color: colorForCategory(category, scheme),
+      ),
     );
   }
 }

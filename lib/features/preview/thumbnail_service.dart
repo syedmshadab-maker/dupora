@@ -14,7 +14,17 @@ PreviewCategory categoryForExtension(String extension) {
   const images = {'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'heic', 'tiff'};
   const videos = {'mp4', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv'};
   const audio = {'mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a'};
-  const documents = {'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'rtf', 'odt'};
+  const documents = {
+    'doc',
+    'docx',
+    'xls',
+    'xlsx',
+    'ppt',
+    'pptx',
+    'txt',
+    'rtf',
+    'odt',
+  };
   const archives = {'zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz'};
   if (images.contains(ext)) return PreviewCategory.image;
   if (videos.contains(ext)) return PreviewCategory.video;
@@ -34,7 +44,8 @@ PreviewCategory categoryForExtension(String extension) {
 /// widget). Image thumbnails are real, decoded via the pure-Dart `image`
 /// package so behavior is identical on every platform.
 class ThumbnailService {
-  ThumbnailService({int memoryCacheCapacity = 200}) : _memoryCacheCapacity = memoryCacheCapacity;
+  ThumbnailService({int memoryCacheCapacity = 200})
+    : _memoryCacheCapacity = memoryCacheCapacity;
 
   final int _memoryCacheCapacity;
   final Map<String, Uint8List> _memoryCache = {};
@@ -54,7 +65,9 @@ class ThumbnailService {
   }
 
   String _cacheKeyFor(String path, DateTime modifiedAt) {
-    final digest = sha1.convert('$path|${modifiedAt.millisecondsSinceEpoch}'.codeUnits);
+    final digest = sha1.convert(
+      '$path|${modifiedAt.millisecondsSinceEpoch}'.codeUnits,
+    );
     return digest.toString();
   }
 

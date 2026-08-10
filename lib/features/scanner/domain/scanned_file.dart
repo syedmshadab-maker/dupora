@@ -58,7 +58,11 @@ class ScannedFile {
 /// can inspect failures afterward.
 @immutable
 class ScanError {
-  const ScanError({required this.path, required this.message, required this.stage});
+  const ScanError({
+    required this.path,
+    required this.message,
+    required this.stage,
+  });
 
   final String path;
   final String message;

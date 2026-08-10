@@ -19,7 +19,8 @@ class HashOutcome {
   bool get isCancelled => status == NativeStatus.cancelled;
 
   /// Lowercase hex digest, e.g. for cache keys / duplicate-group identity.
-  String get hex => digest.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  String get hex =>
+      digest.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
 }
 
 /// A cooperative cancellation flag backed by native memory, sendable across
@@ -43,7 +44,8 @@ class CancelSignal {
   /// the isolate that created it. Native pointers are safe to send between
   /// isolates in the same process because they address shared, non-Dart-heap
   /// memory.
-  CancelSignal.fromRawAddress(int address) : _ptr = ffi.Pointer.fromAddress(address);
+  CancelSignal.fromRawAddress(int address)
+    : _ptr = ffi.Pointer.fromAddress(address);
 
   int get rawAddress => _ptr.address;
 
@@ -72,7 +74,8 @@ class NativeProgressCounter {
     return NativeProgressCounter._(ptr);
   }
 
-  NativeProgressCounter.fromRawAddress(int address) : _ptr = ffi.Pointer.fromAddress(address);
+  NativeProgressCounter.fromRawAddress(int address)
+    : _ptr = ffi.Pointer.fromAddress(address);
 
   int get rawAddress => _ptr.address;
 
@@ -127,7 +130,12 @@ class NativeHasher {
     final outHash = calloc<ffi.Uint8>(kDigestLen);
     try {
       pathPtr.asTypedList(pathBytes.length).setAll(0, pathBytes);
-      final code = _bindings.partialFingerprint(pathPtr, pathBytes.length, fileLen, outHash);
+      final code = _bindings.partialFingerprint(
+        pathPtr,
+        pathBytes.length,
+        fileLen,
+        outHash,
+      );
       final status = NativeStatus.fromCode(code);
       final digest = status == NativeStatus.ok
           ? Uint8List.fromList(outHash.asTypedList(kDigestLen))
@@ -166,14 +174,18 @@ class IncrementalHasher {
   bool _finished = false;
 
   void update(Uint8List chunk) {
-    if (_finished) throw StateError('IncrementalHasher already finalized/aborted');
+    if (_finished) {
+      throw StateError('IncrementalHasher already finalized/aborted');
+    }
     if (chunk.isEmpty) return;
     final ptr = calloc<ffi.Uint8>(chunk.length);
     try {
       ptr.asTypedList(chunk.length).setAll(0, chunk);
       final status = _bindings.streamHasherUpdate(_handle, ptr, chunk.length);
       if (NativeStatus.fromCode(status) != NativeStatus.ok) {
-        throw StateError('Native stream hasher rejected update (status=$status)');
+        throw StateError(
+          'Native stream hasher rejected update (status=$status)',
+        );
       }
     } finally {
       calloc.free(ptr);
@@ -181,7 +193,9 @@ class IncrementalHasher {
   }
 
   HashOutcome finalizeHash() {
-    if (_finished) throw StateError('IncrementalHasher already finalized/aborted');
+    if (_finished) {
+      throw StateError('IncrementalHasher already finalized/aborted');
+    }
     _finished = true;
     final outHash = calloc<ffi.Uint8>(kDigestLen);
     try {

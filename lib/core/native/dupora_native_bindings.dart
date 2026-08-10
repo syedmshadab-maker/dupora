@@ -7,33 +7,37 @@ import 'package:ffi/ffi.dart';
 /// `rust/src/ffi/mod.rs`. Nothing in this file does I/O beyond loading the
 /// shared library; the ergonomic/async-friendly wrapper lives in
 /// `hash_engine.dart`.
-typedef _HashFileFullNative = ffi.Int32 Function(
-  ffi.Pointer<ffi.Uint8> pathPtr,
-  ffi.Size pathLen,
-  ffi.Pointer<ffi.Uint64> progressPtr,
-  ffi.Pointer<ffi.Uint8> cancelPtr,
-  ffi.Pointer<ffi.Uint8> outHash,
-);
-typedef HashFileFullDart = int Function(
-  ffi.Pointer<ffi.Uint8> pathPtr,
-  int pathLen,
-  ffi.Pointer<ffi.Uint64> progressPtr,
-  ffi.Pointer<ffi.Uint8> cancelPtr,
-  ffi.Pointer<ffi.Uint8> outHash,
-);
+typedef _HashFileFullNative =
+    ffi.Int32 Function(
+      ffi.Pointer<ffi.Uint8> pathPtr,
+      ffi.Size pathLen,
+      ffi.Pointer<ffi.Uint64> progressPtr,
+      ffi.Pointer<ffi.Uint8> cancelPtr,
+      ffi.Pointer<ffi.Uint8> outHash,
+    );
+typedef HashFileFullDart =
+    int Function(
+      ffi.Pointer<ffi.Uint8> pathPtr,
+      int pathLen,
+      ffi.Pointer<ffi.Uint64> progressPtr,
+      ffi.Pointer<ffi.Uint8> cancelPtr,
+      ffi.Pointer<ffi.Uint8> outHash,
+    );
 
-typedef _PartialFingerprintNative = ffi.Int32 Function(
-  ffi.Pointer<ffi.Uint8> pathPtr,
-  ffi.Size pathLen,
-  ffi.Uint64 fileLen,
-  ffi.Pointer<ffi.Uint8> outHash,
-);
-typedef PartialFingerprintDart = int Function(
-  ffi.Pointer<ffi.Uint8> pathPtr,
-  int pathLen,
-  int fileLen,
-  ffi.Pointer<ffi.Uint8> outHash,
-);
+typedef _PartialFingerprintNative =
+    ffi.Int32 Function(
+      ffi.Pointer<ffi.Uint8> pathPtr,
+      ffi.Size pathLen,
+      ffi.Uint64 fileLen,
+      ffi.Pointer<ffi.Uint8> outHash,
+    );
+typedef PartialFingerprintDart =
+    int Function(
+      ffi.Pointer<ffi.Uint8> pathPtr,
+      int pathLen,
+      int fileLen,
+      ffi.Pointer<ffi.Uint8> outHash,
+    );
 
 typedef _LogicalCpuCountNative = ffi.Size Function();
 typedef LogicalCpuCountDart = int Function();
@@ -44,15 +48,19 @@ typedef EngineVersionDart = ffi.Pointer<Utf8> Function();
 typedef _StreamHasherNewNative = ffi.Uint64 Function();
 typedef StreamHasherNewDart = int Function();
 
-typedef _StreamHasherUpdateNative = ffi.Int32 Function(
-  ffi.Uint64 handle,
-  ffi.Pointer<ffi.Uint8> ptr,
-  ffi.Size len,
-);
-typedef StreamHasherUpdateDart = int Function(int handle, ffi.Pointer<ffi.Uint8> ptr, int len);
+typedef _StreamHasherUpdateNative =
+    ffi.Int32 Function(
+      ffi.Uint64 handle,
+      ffi.Pointer<ffi.Uint8> ptr,
+      ffi.Size len,
+    );
+typedef StreamHasherUpdateDart =
+    int Function(int handle, ffi.Pointer<ffi.Uint8> ptr, int len);
 
-typedef _StreamHasherFinalizeNative = ffi.Int32 Function(ffi.Uint64 handle, ffi.Pointer<ffi.Uint8> outHash);
-typedef StreamHasherFinalizeDart = int Function(int handle, ffi.Pointer<ffi.Uint8> outHash);
+typedef _StreamHasherFinalizeNative =
+    ffi.Int32 Function(ffi.Uint64 handle, ffi.Pointer<ffi.Uint8> outHash);
+typedef StreamHasherFinalizeDart =
+    int Function(int handle, ffi.Pointer<ffi.Uint8> outHash);
 
 typedef _StreamHasherAbortNative = ffi.Int32 Function(ffi.Uint64 handle);
 typedef StreamHasherAbortDart = int Function(int handle);
@@ -63,46 +71,46 @@ const int kDigestLen = 32;
 
 class DuporaNativeBindings {
   DuporaNativeBindings._(ffi.DynamicLibrary lib)
-      : hashFileFull = lib
-            .lookup<ffi.NativeFunction<_HashFileFullNative>>(
-              'dupora_hash_file_full',
-            )
-            .asFunction(),
-        partialFingerprint = lib
-            .lookup<ffi.NativeFunction<_PartialFingerprintNative>>(
-              'dupora_partial_fingerprint',
-            )
-            .asFunction(),
-        logicalCpuCount = lib
-            .lookup<ffi.NativeFunction<_LogicalCpuCountNative>>(
-              'dupora_logical_cpu_count',
-            )
-            .asFunction(),
-        engineVersion = lib
-            .lookup<ffi.NativeFunction<_EngineVersionNative>>(
-              'dupora_engine_version',
-            )
-            .asFunction(),
-        streamHasherNew = lib
-            .lookup<ffi.NativeFunction<_StreamHasherNewNative>>(
-              'dupora_stream_hasher_new',
-            )
-            .asFunction(),
-        streamHasherUpdate = lib
-            .lookup<ffi.NativeFunction<_StreamHasherUpdateNative>>(
-              'dupora_stream_hasher_update',
-            )
-            .asFunction(),
-        streamHasherFinalize = lib
-            .lookup<ffi.NativeFunction<_StreamHasherFinalizeNative>>(
-              'dupora_stream_hasher_finalize',
-            )
-            .asFunction(),
-        streamHasherAbort = lib
-            .lookup<ffi.NativeFunction<_StreamHasherAbortNative>>(
-              'dupora_stream_hasher_abort',
-            )
-            .asFunction();
+    : hashFileFull = lib
+          .lookup<ffi.NativeFunction<_HashFileFullNative>>(
+            'dupora_hash_file_full',
+          )
+          .asFunction(),
+      partialFingerprint = lib
+          .lookup<ffi.NativeFunction<_PartialFingerprintNative>>(
+            'dupora_partial_fingerprint',
+          )
+          .asFunction(),
+      logicalCpuCount = lib
+          .lookup<ffi.NativeFunction<_LogicalCpuCountNative>>(
+            'dupora_logical_cpu_count',
+          )
+          .asFunction(),
+      engineVersion = lib
+          .lookup<ffi.NativeFunction<_EngineVersionNative>>(
+            'dupora_engine_version',
+          )
+          .asFunction(),
+      streamHasherNew = lib
+          .lookup<ffi.NativeFunction<_StreamHasherNewNative>>(
+            'dupora_stream_hasher_new',
+          )
+          .asFunction(),
+      streamHasherUpdate = lib
+          .lookup<ffi.NativeFunction<_StreamHasherUpdateNative>>(
+            'dupora_stream_hasher_update',
+          )
+          .asFunction(),
+      streamHasherFinalize = lib
+          .lookup<ffi.NativeFunction<_StreamHasherFinalizeNative>>(
+            'dupora_stream_hasher_finalize',
+          )
+          .asFunction(),
+      streamHasherAbort = lib
+          .lookup<ffi.NativeFunction<_StreamHasherAbortNative>>(
+            'dupora_stream_hasher_abort',
+          )
+          .asFunction();
 
   final HashFileFullDart hashFileFull;
   final PartialFingerprintDart partialFingerprint;
@@ -148,11 +156,7 @@ class DuporaNativeBindings {
       final devSubpath = Platform.isWindows
           ? 'rust\\target\\release\\$fileName'
           : 'rust/target/release/$fileName';
-      candidates.addAll([
-        devSubpath,
-        '../$devSubpath',
-        '../../$devSubpath',
-      ]);
+      candidates.addAll([devSubpath, '../$devSubpath', '../../$devSubpath']);
     }
 
     Object? lastError;

@@ -10,7 +10,8 @@ String formatBytes(int bytes) {
   return '${value.toStringAsFixed(value < 10 ? 2 : 1)} ${units[unitIndex]}';
 }
 
-String formatRate(double bytesPerSecond) => '${formatBytes(bytesPerSecond.round())}/s';
+String formatRate(double bytesPerSecond) =>
+    '${formatBytes(bytesPerSecond.round())}/s';
 
 String formatDuration(Duration d) {
   if (d.inHours > 0) {

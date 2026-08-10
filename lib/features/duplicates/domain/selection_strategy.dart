@@ -4,7 +4,12 @@ import '../../deletion/protected_locations.dart';
 import '../../scanner/domain/scanned_file.dart';
 import 'duplicate_group.dart';
 
-enum SmartSelectionStrategy { keepOldest, keepNewest, keepShortestPath, keepFirst }
+enum SmartSelectionStrategy {
+  keepOldest,
+  keepNewest,
+  keepShortestPath,
+  keepFirst,
+}
 
 /// Result of applying a [SmartSelectionStrategy] to a [DuplicateGroup]:
 /// exactly one file to keep, and the rest marked for deletion. The kept
@@ -12,7 +17,10 @@ enum SmartSelectionStrategy { keepOldest, keepNewest, keepShortestPath, keepFirs
 /// never selected for deletion even if the strategy would otherwise have
 /// chosen it as a duplicate.
 class SelectionResult {
-  const SelectionResult({required this.keep, required this.selectedForDeletion});
+  const SelectionResult({
+    required this.keep,
+    required this.selectedForDeletion,
+  });
 
   final ScannedFile keep;
   final List<ScannedFile> selectedForDeletion;
@@ -33,7 +41,9 @@ SelectionResult applySmartSelection(
   late final ScannedFile keep;
   switch (strategy) {
     case SmartSelectionStrategy.keepOldest:
-      keep = files.reduce((a, b) => a.modifiedAt.isBefore(b.modifiedAt) ? a : b);
+      keep = files.reduce(
+        (a, b) => a.modifiedAt.isBefore(b.modifiedAt) ? a : b,
+      );
     case SmartSelectionStrategy.keepNewest:
       keep = files.reduce((a, b) => a.modifiedAt.isAfter(b.modifiedAt) ? a : b);
     case SmartSelectionStrategy.keepShortestPath:

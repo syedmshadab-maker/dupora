@@ -35,20 +35,20 @@ class ScanProgress {
   });
 
   const ScanProgress.initial()
-      : phase = ScanPhase.idle,
-        totalFiles = 0,
-        processedFiles = 0,
-        totalBytes = 0,
-        processedBytes = 0,
-        currentFile = null,
-        bytesPerSecond = 0,
-        filesPerSecond = 0,
-        estimatedRemaining = null,
-        duplicateFiles = 0,
-        duplicateBytes = 0,
-        errorCount = 0,
-        isPaused = false,
-        isCancelled = false;
+    : phase = ScanPhase.idle,
+      totalFiles = 0,
+      processedFiles = 0,
+      totalBytes = 0,
+      processedBytes = 0,
+      currentFile = null,
+      bytesPerSecond = 0,
+      filesPerSecond = 0,
+      estimatedRemaining = null,
+      duplicateFiles = 0,
+      duplicateBytes = 0,
+      errorCount = 0,
+      isPaused = false,
+      isCancelled = false;
 
   final ScanPhase phase;
   final int totalFiles;
@@ -65,7 +65,8 @@ class ScanProgress {
   final bool isPaused;
   final bool isCancelled;
 
-  double get fractionComplete => totalFiles == 0 ? 0 : (processedFiles / totalFiles).clamp(0, 1);
+  double get fractionComplete =>
+      totalFiles == 0 ? 0 : (processedFiles / totalFiles).clamp(0, 1);
 
   ScanProgress copyWith({
     ScanPhase? phase,

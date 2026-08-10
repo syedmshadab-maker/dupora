@@ -7,9 +7,15 @@ import '../../scanner/domain/scanned_file.dart';
 /// constructed from filename, partial-hash, or metadata similarity alone.
 @immutable
 class DuplicateGroup {
-  DuplicateGroup({required this.fullHashHex, required this.fileSize, required List<ScannedFile> files})
-      : files = List.unmodifiable(files) {
-    assert(files.length >= 2, 'a duplicate group must contain at least 2 files');
+  DuplicateGroup({
+    required this.fullHashHex,
+    required this.fileSize,
+    required List<ScannedFile> files,
+  }) : files = List.unmodifiable(files) {
+    assert(
+      files.length >= 2,
+      'a duplicate group must contain at least 2 files',
+    );
   }
 
   final String fullHashHex;

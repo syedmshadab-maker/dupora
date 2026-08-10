@@ -8,8 +8,14 @@ void main() {
     test('protects default OS roots', () {
       final locations = ProtectedLocations();
       if (Platform.isWindows) {
-        expect(locations.isProtected(r'C:\Windows\System32\kernel32.dll'), isTrue);
-        expect(locations.isProtected(r'C:\Users\me\Documents\report.docx'), isFalse);
+        expect(
+          locations.isProtected(r'C:\Windows\System32\kernel32.dll'),
+          isTrue,
+        );
+        expect(
+          locations.isProtected(r'C:\Users\me\Documents\report.docx'),
+          isFalse,
+        );
       }
     });
 
@@ -33,7 +39,10 @@ void main() {
       final locations = ProtectedLocations();
       if (Platform.isWindows) {
         expect(locations.isProtected(r'D:\Photos\vacation.jpg'), isFalse);
-        expect(locations.isProtected(r'C:\Users\me\Downloads\file.zip'), isFalse);
+        expect(
+          locations.isProtected(r'C:\Users\me\Downloads\file.zip'),
+          isFalse,
+        );
       }
     });
   });

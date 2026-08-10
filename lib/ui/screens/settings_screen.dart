@@ -22,23 +22,32 @@ class SettingsScreen extends StatelessWidget {
             title: const Text('Scan hidden files'),
             subtitle: const Text('Include dotfiles / hidden-attribute files'),
             value: s.scanHiddenFiles,
-            onChanged: (v) => controller.updateSettings(s.copyWith(scanHiddenFiles: v)),
+            onChanged: (v) =>
+                controller.updateSettings(s.copyWith(scanHiddenFiles: v)),
           ),
           SwitchListTile(
             title: const Text('Scan system files'),
             subtitle: const Text('Include OS-marked system files'),
             value: s.scanSystemFiles,
-            onChanged: (v) => controller.updateSettings(s.copyWith(scanSystemFiles: v)),
+            onChanged: (v) =>
+                controller.updateSettings(s.copyWith(scanSystemFiles: v)),
           ),
           SwitchListTile(
             title: const Text('Follow symlinks'),
-            subtitle: const Text('Off by default to avoid loops and scanning outside selected folders'),
+            subtitle: const Text(
+              'Off by default to avoid loops and scanning outside selected folders',
+            ),
             value: s.followSymlinks,
-            onChanged: (v) => controller.updateSettings(s.copyWith(followSymlinks: v)),
+            onChanged: (v) =>
+                controller.updateSettings(s.copyWith(followSymlinks: v)),
           ),
           ListTile(
             title: const Text('Maximum concurrency'),
-            subtitle: Text(s.maxConcurrency == 0 ? 'Automatic (based on CPU cores)' : '${s.maxConcurrency} workers'),
+            subtitle: Text(
+              s.maxConcurrency == 0
+                  ? 'Automatic (based on CPU cores)'
+                  : '${s.maxConcurrency} workers',
+            ),
             trailing: SizedBox(
               width: 160,
               child: Slider(
@@ -47,7 +56,9 @@ class SettingsScreen extends StatelessWidget {
                 max: 16,
                 divisions: 16,
                 label: s.maxConcurrency == 0 ? 'Auto' : '${s.maxConcurrency}',
-                onChanged: (v) => controller.updateSettings(s.copyWith(maxConcurrency: v.round())),
+                onChanged: (v) => controller.updateSettings(
+                  s.copyWith(maxConcurrency: v.round()),
+                ),
               ),
             ),
           ),
@@ -56,7 +67,8 @@ class SettingsScreen extends StatelessWidget {
           SwitchListTile(
             title: const Text('Confirm before delete'),
             value: s.confirmBeforeDelete,
-            onChanged: (v) => controller.updateSettings(s.copyWith(confirmBeforeDelete: v)),
+            onChanged: (v) =>
+                controller.updateSettings(s.copyWith(confirmBeforeDelete: v)),
           ),
           ListTile(
             title: const Text('Default smart-selection strategy'),
@@ -64,10 +76,19 @@ class SettingsScreen extends StatelessWidget {
             trailing: DropdownButton<SmartSelectionStrategy>(
               value: s.defaultSelectionStrategy,
               onChanged: (v) {
-                if (v != null) controller.updateSettings(s.copyWith(defaultSelectionStrategy: v));
+                if (v != null) {
+                  controller.updateSettings(
+                    s.copyWith(defaultSelectionStrategy: v),
+                  );
+                }
               },
               items: SmartSelectionStrategy.values
-                  .map((v) => DropdownMenuItem(value: v, child: Text(_strategyLabel(v))))
+                  .map(
+                    (v) => DropdownMenuItem(
+                      value: v,
+                      child: Text(_strategyLabel(v)),
+                    ),
+                  )
                   .toList(),
             ),
           ),
@@ -77,12 +98,19 @@ class SettingsScreen extends StatelessWidget {
             title: const Text('Theme'),
             trailing: SegmentedButton<DuporaThemeMode>(
               segments: const [
-                ButtonSegment(value: DuporaThemeMode.system, label: Text('System')),
-                ButtonSegment(value: DuporaThemeMode.light, label: Text('Light')),
+                ButtonSegment(
+                  value: DuporaThemeMode.system,
+                  label: Text('System'),
+                ),
+                ButtonSegment(
+                  value: DuporaThemeMode.light,
+                  label: Text('Light'),
+                ),
                 ButtonSegment(value: DuporaThemeMode.dark, label: Text('Dark')),
               ],
               selected: {s.themeMode},
-              onSelectionChanged: (v) => controller.updateSettings(s.copyWith(themeMode: v.first)),
+              onSelectionChanged: (v) =>
+                  controller.updateSettings(s.copyWith(themeMode: v.first)),
             ),
           ),
           const Divider(),
@@ -94,7 +122,8 @@ class SettingsScreen extends StatelessWidget {
                 icon: const Icon(Icons.close),
                 onPressed: () => controller.updateSettings(
                   s.copyWith(
-                    userProtectedLocations: [...s.userProtectedLocations]..remove(loc),
+                    userProtectedLocations: [...s.userProtectedLocations]
+                      ..remove(loc),
                   ),
                 ),
               ),
@@ -113,11 +142,11 @@ class SettingsScreen extends StatelessWidget {
   }
 
   String _strategyLabel(SmartSelectionStrategy s) => switch (s) {
-        SmartSelectionStrategy.keepOldest => 'Keep oldest',
-        SmartSelectionStrategy.keepNewest => 'Keep newest',
-        SmartSelectionStrategy.keepShortestPath => 'Keep shortest path',
-        SmartSelectionStrategy.keepFirst => 'Keep first',
-      };
+    SmartSelectionStrategy.keepOldest => 'Keep oldest',
+    SmartSelectionStrategy.keepNewest => 'Keep newest',
+    SmartSelectionStrategy.keepShortestPath => 'Keep shortest path',
+    SmartSelectionStrategy.keepFirst => 'Keep first',
+  };
 }
 
 class _SectionHeader extends StatelessWidget {
@@ -130,7 +159,9 @@ class _SectionHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
       child: Text(
         text,
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(color: Theme.of(context).colorScheme.primary),
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+          color: Theme.of(context).colorScheme.primary,
+        ),
       ),
     );
   }

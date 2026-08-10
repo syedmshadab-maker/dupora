@@ -1,4 +1,3 @@
-
 import 'package:flutter/services.dart';
 
 import '../../../core/native/hash_engine.dart';
@@ -31,7 +30,9 @@ class SafDocument {
       mimeType: map['mimeType'] as String?,
       isDirectory: map['isDirectory'] as bool? ?? false,
       size: (map['size'] as num?)?.toInt() ?? 0,
-      lastModified: DateTime.fromMillisecondsSinceEpoch((map['lastModified'] as num?)?.toInt() ?? 0),
+      lastModified: DateTime.fromMillisecondsSinceEpoch(
+        (map['lastModified'] as num?)?.toInt() ?? 0,
+      ),
     );
   }
 }
@@ -44,13 +45,20 @@ class SafBridge {
   static const int _chunkSize = 256 * 1024;
 
   Future<({String treeUri, String displayName})?> pickDirectory() async {
-    final result = await _channel.invokeMapMethod<String, Object?>('pickDirectory');
+    final result = await _channel.invokeMapMethod<String, Object?>(
+      'pickDirectory',
+    );
     if (result == null) return null;
-    return (treeUri: result['treeUri'] as String, displayName: result['displayName'] as String);
+    return (
+      treeUri: result['treeUri'] as String,
+      displayName: result['displayName'] as String,
+    );
   }
 
   Future<List<String>> listPersistedTrees() async {
-    final result = await _channel.invokeListMethod<Map<Object?, Object?>>('listPersistedTrees');
+    final result = await _channel.invokeListMethod<Map<Object?, Object?>>(
+      'listPersistedTrees',
+    );
     return result?.map((m) => m['treeUri'] as String).toList() ?? const [];
   }
 
@@ -58,16 +66,21 @@ class SafBridge {
     return _channel.invokeMethod('releaseTree', {'treeUri': treeUri});
   }
 
-  Future<List<SafDocument>> listChildren(String treeUri, {String? parentDocumentId}) async {
-    final result = await _channel.invokeListMethod<Map<Object?, Object?>>('listChildren', {
-      'treeUri': treeUri,
-      'parentDocumentId': parentDocumentId,
-    });
+  Future<List<SafDocument>> listChildren(
+    String treeUri, {
+    String? parentDocumentId,
+  }) async {
+    final result = await _channel.invokeListMethod<Map<Object?, Object?>>(
+      'listChildren',
+      {'treeUri': treeUri, 'parentDocumentId': parentDocumentId},
+    );
     return result?.map(SafDocument.fromMap).toList() ?? const [];
   }
 
   Future<bool> deleteDocument(String documentUri) async {
-    final result = await _channel.invokeMethod<bool>('deleteDocument', {'documentUri': documentUri});
+    final result = await _channel.invokeMethod<bool>('deleteDocument', {
+      'documentUri': documentUri,
+    });
     return result ?? false;
   }
 
@@ -81,7 +94,9 @@ class SafBridge {
     void Function(int bytesProcessed)? onProgress,
     bool Function()? isCancelled,
   }) async {
-    final handle = await _channel.invokeMethod<int>('openStream', {'documentUri': documentUri});
+    final handle = await _channel.invokeMethod<int>('openStream', {
+      'documentUri': documentUri,
+    });
     if (handle == null) {
       throw StateError('Failed to open SAF stream for $documentUri');
     }

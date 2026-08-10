@@ -24,22 +24,31 @@ Widget _wrap(AppController controller) {
 }
 
 void main() {
-  testWidgets('toggling "Scan hidden files" calls updateSettings with the new value', (tester) async {
+  testWidgets(
+    'toggling "Scan hidden files" calls updateSettings with the new value',
+    (tester) async {
+      final controller = _FakeAppController();
+      await tester.pumpWidget(_wrap(controller));
+
+      expect(controller.settings.scanHiddenFiles, isFalse);
+
+      await tester.tap(
+        find.widgetWithText(SwitchListTile, 'Scan hidden files'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(controller.updateCount, 1);
+      expect(controller.settings.scanHiddenFiles, isTrue);
+    },
+  );
+
+  testWidgets('protected locations from settings are listed and removable', (
+    tester,
+  ) async {
     final controller = _FakeAppController();
-    await tester.pumpWidget(_wrap(controller));
-
-    expect(controller.settings.scanHiddenFiles, isFalse);
-
-    await tester.tap(find.widgetWithText(SwitchListTile, 'Scan hidden files'));
-    await tester.pumpAndSettle();
-
-    expect(controller.updateCount, 1);
-    expect(controller.settings.scanHiddenFiles, isTrue);
-  });
-
-  testWidgets('protected locations from settings are listed and removable', (tester) async {
-    final controller = _FakeAppController();
-    controller.settings = controller.settings.copyWith(userProtectedLocations: const ['C:\\Vault']);
+    controller.settings = controller.settings.copyWith(
+      userProtectedLocations: const ['C:\\Vault'],
+    );
     await tester.pumpWidget(_wrap(controller));
 
     await tester.scrollUntilVisible(find.text('C:\\Vault'), 300);

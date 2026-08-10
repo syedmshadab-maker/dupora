@@ -49,7 +49,12 @@ class WindowsStorageDetector implements StorageDetector {
       int total = 0;
       int free = 0;
       try {
-        final ok = GetDiskFreeSpaceEx(rootPtr, freeAvailable, totalBytes, totalFree);
+        final ok = GetDiskFreeSpaceEx(
+          rootPtr,
+          freeAvailable,
+          totalBytes,
+          totalFree,
+        );
         if (ok != 0) {
           total = totalBytes.value;
           free = totalFree.value;
@@ -62,7 +67,8 @@ class WindowsStorageDetector implements StorageDetector {
 
       // A drive that couldn't be queried at all (e.g. an empty removable
       // reader) is skipped rather than shown as a confusing 0-byte volume.
-      if (total == 0 && (driveType == DRIVE_REMOVABLE || driveType == DRIVE_CDROM)) {
+      if (total == 0 &&
+          (driveType == DRIVE_REMOVABLE || driveType == DRIVE_CDROM)) {
         return null;
       }
 

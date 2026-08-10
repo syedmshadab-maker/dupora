@@ -38,7 +38,9 @@ class HashCacheDatabase extends _$HashCacheDatabase {
     return HashCacheDatabase(NativeDatabase.createInBackground(file));
   }
 
-  static HashCacheDatabase openAt(File file) => HashCacheDatabase(NativeDatabase.createInBackground(file));
+  static HashCacheDatabase openAt(File file) =>
+      HashCacheDatabase(NativeDatabase.createInBackground(file));
 
-  static HashCacheDatabase inMemory() => HashCacheDatabase(NativeDatabase.memory());
+  static HashCacheDatabase inMemory() =>
+      HashCacheDatabase(NativeDatabase.memory());
 }

@@ -16,8 +16,14 @@ class DuporaApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final controller = context.watch<AppController>();
 
-    final lightScheme = ColorScheme.fromSeed(seedColor: _seed, brightness: Brightness.light);
-    final darkScheme = ColorScheme.fromSeed(seedColor: _seed, brightness: Brightness.dark);
+    final lightScheme = ColorScheme.fromSeed(
+      seedColor: _seed,
+      brightness: Brightness.light,
+    );
+    final darkScheme = ColorScheme.fromSeed(
+      seedColor: _seed,
+      brightness: Brightness.dark,
+    );
 
     return MaterialApp(
       title: 'Dupora',

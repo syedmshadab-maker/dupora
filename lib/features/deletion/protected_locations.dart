@@ -11,7 +11,10 @@ import 'package:path/path.dart' as p;
 /// default, plus whatever the user adds in Settings.
 class ProtectedLocations {
   ProtectedLocations({List<String>? userDefined})
-      : _roots = {..._defaultRootsForPlatform(), ...?userDefined?.map(_normalize)};
+    : _roots = {
+        ..._defaultRootsForPlatform(),
+        ...?userDefined?.map(_normalize),
+      };
 
   final Set<String> _roots;
 
@@ -44,9 +47,13 @@ class ProtectedLocations {
   static Set<String> _defaultRootsForPlatform() {
     if (Platform.isWindows) {
       final systemRoot = Platform.environment['SystemRoot'] ?? r'C:\Windows';
-      final programFiles = Platform.environment['ProgramFiles'] ?? r'C:\Program Files';
-      final programFilesX86 = Platform.environment['ProgramFiles(x86)'] ?? r'C:\Program Files (x86)';
-      final programData = Platform.environment['ProgramData'] ?? r'C:\ProgramData';
+      final programFiles =
+          Platform.environment['ProgramFiles'] ?? r'C:\Program Files';
+      final programFilesX86 =
+          Platform.environment['ProgramFiles(x86)'] ??
+          r'C:\Program Files (x86)';
+      final programData =
+          Platform.environment['ProgramData'] ?? r'C:\ProgramData';
       final localAppData = Platform.environment['LOCALAPPDATA'];
       final roots = <String>{
         systemRoot,
@@ -62,17 +69,37 @@ class ProtectedLocations {
       return roots.map(_normalize).toSet();
     }
     if (Platform.isMacOS) {
-      return {'/System', '/Library', '/private', '/bin', '/sbin', '/usr', '/Applications'}
-          .map(_normalize)
-          .toSet();
+      return {
+        '/System',
+        '/Library',
+        '/private',
+        '/bin',
+        '/sbin',
+        '/usr',
+        '/Applications',
+      }.map(_normalize).toSet();
     }
     if (Platform.isLinux) {
-      return {'/bin', '/boot', '/etc', '/lib', '/lib64', '/proc', '/sys', '/sbin', '/usr', '/var/lib'}
-          .map(_normalize)
-          .toSet();
+      return {
+        '/bin',
+        '/boot',
+        '/etc',
+        '/lib',
+        '/lib64',
+        '/proc',
+        '/sys',
+        '/sbin',
+        '/usr',
+        '/var/lib',
+      }.map(_normalize).toSet();
     }
     if (Platform.isAndroid) {
-      return {'/system', '/data/system', '/data/app', '/vendor'}.map(_normalize).toSet();
+      return {
+        '/system',
+        '/data/system',
+        '/data/app',
+        '/vendor',
+      }.map(_normalize).toSet();
     }
     return {};
   }

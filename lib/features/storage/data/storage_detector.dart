@@ -18,6 +18,8 @@ abstract class StorageDetector {
         'not the generic StorageDetector.forPlatform() path.',
       );
     }
-    throw UnsupportedError('No storage detector for ${Platform.operatingSystem}');
+    throw UnsupportedError(
+      'No storage detector for ${Platform.operatingSystem}',
+    );
   }
 }

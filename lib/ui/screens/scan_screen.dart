@@ -9,15 +9,15 @@ class ScanScreen extends StatelessWidget {
   const ScanScreen({super.key});
 
   String _phaseLabel(ScanPhase phase) => switch (phase) {
-        ScanPhase.idle => 'Preparing…',
-        ScanPhase.discovering => 'Discovering files',
-        ScanPhase.sizeGrouping => 'Grouping by size',
-        ScanPhase.partialHashing => 'Fingerprinting candidates',
-        ScanPhase.fullHashing => 'Verifying with BLAKE3',
-        ScanPhase.completed => 'Completed',
-        ScanPhase.cancelled => 'Cancelled',
-        ScanPhase.failed => 'Failed',
-      };
+    ScanPhase.idle => 'Preparing…',
+    ScanPhase.discovering => 'Discovering files',
+    ScanPhase.sizeGrouping => 'Grouping by size',
+    ScanPhase.partialHashing => 'Fingerprinting candidates',
+    ScanPhase.fullHashing => 'Verifying with BLAKE3',
+    ScanPhase.completed => 'Completed',
+    ScanPhase.cancelled => 'Cancelled',
+    ScanPhase.failed => 'Failed',
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -32,12 +32,17 @@ class ScanScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(_phaseLabel(progress.phase), style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              _phaseLabel(progress.phase),
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 16),
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: LinearProgressIndicator(
-                value: progress.totalFiles == 0 ? null : progress.fractionComplete,
+                value: progress.totalFiles == 0
+                    ? null
+                    : progress.fractionComplete,
                 minHeight: 10,
                 backgroundColor: scheme.surfaceContainerHighest,
               ),
@@ -59,14 +64,26 @@ class ScanScreen extends StatelessWidget {
             const SizedBox(height: 24),
             Row(
               children: [
-                Expanded(child: _StatCard(label: 'Speed', value: formatRate(progress.bytesPerSecond))),
+                Expanded(
+                  child: _StatCard(
+                    label: 'Speed',
+                    value: formatRate(progress.bytesPerSecond),
+                  ),
+                ),
                 const SizedBox(width: 12),
-                Expanded(child: _StatCard(label: 'Files/s', value: progress.filesPerSecond.toStringAsFixed(1))),
+                Expanded(
+                  child: _StatCard(
+                    label: 'Files/s',
+                    value: progress.filesPerSecond.toStringAsFixed(1),
+                  ),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: _StatCard(
                     label: 'ETA',
-                    value: progress.estimatedRemaining == null ? '—' : formatDuration(progress.estimatedRemaining!),
+                    value: progress.estimatedRemaining == null
+                        ? '—'
+                        : formatDuration(progress.estimatedRemaining!),
                   ),
                 ),
               ],
@@ -77,11 +94,17 @@ class ScanScreen extends StatelessWidget {
                 Expanded(
                   child: _StatCard(
                     label: 'Data scanned',
-                    value: '${formatBytes(progress.processedBytes)} / ${formatBytes(progress.totalBytes)}',
+                    value:
+                        '${formatBytes(progress.processedBytes)} / ${formatBytes(progress.totalBytes)}',
                   ),
                 ),
                 const SizedBox(width: 12),
-                Expanded(child: _StatCard(label: 'Errors', value: '${progress.errorCount}')),
+                Expanded(
+                  child: _StatCard(
+                    label: 'Errors',
+                    value: '${progress.errorCount}',
+                  ),
+                ),
               ],
             ),
             const Spacer(),
@@ -89,8 +112,12 @@ class ScanScreen extends StatelessWidget {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () => progress.isPaused ? controller.resumeScan() : controller.pauseScan(),
-                    icon: Icon(progress.isPaused ? Icons.play_arrow : Icons.pause),
+                    onPressed: () => progress.isPaused
+                        ? controller.resumeScan()
+                        : controller.pauseScan(),
+                    icon: Icon(
+                      progress.isPaused ? Icons.play_arrow : Icons.pause,
+                    ),
                     label: Text(progress.isPaused ? 'Resume' : 'Pause'),
                   ),
                 ),

@@ -59,7 +59,9 @@ class LinuxDeleter implements PlatformDeleter {
 
     final now = nowOverride ?? DateTime.now();
     final infoContent = buildTrashInfo(originalPath: path, deletionDate: now);
-    await File(p.join(infoDir, '$targetName.trashinfo')).writeAsString(infoContent);
+    await File(
+      p.join(infoDir, '$targetName.trashinfo'),
+    ).writeAsString(infoContent);
     await File(path).rename(p.join(filesDir, targetName));
   }
 
@@ -67,10 +69,14 @@ class LinuxDeleter implements PlatformDeleter {
   /// freedesktop.org Trash spec (`[Trash Info]` section with `Path` and
   /// `DeletionDate` keys, `Path` percent-encoded, `DeletionDate` in
   /// `YYYY-MM-DDThh:mm:ss`).
-  static String buildTrashInfo({required String originalPath, required DateTime deletionDate}) {
+  static String buildTrashInfo({
+    required String originalPath,
+    required DateTime deletionDate,
+  }) {
     final encodedPath = Uri.encodeFull(originalPath);
     String two(int n) => n.toString().padLeft(2, '0');
-    final iso = '${deletionDate.year}-${two(deletionDate.month)}-${two(deletionDate.day)}'
+    final iso =
+        '${deletionDate.year}-${two(deletionDate.month)}-${two(deletionDate.day)}'
         'T${two(deletionDate.hour)}:${two(deletionDate.minute)}:${two(deletionDate.second)}';
     return '[Trash Info]\nPath=$encodedPath\nDeletionDate=$iso\n';
   }

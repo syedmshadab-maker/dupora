@@ -40,10 +40,13 @@ class AppController extends ChangeNotifier {
   // synchronous, I/O-free work at construction time. [init] replaces
   // [protectedLocations]/[deleteCoordinator] once real settings are loaded.
   ProtectedLocations protectedLocations = ProtectedLocations();
-  SafeDeleteCoordinator deleteCoordinator = SafeDeleteCoordinator(protectedLocations: ProtectedLocations());
+  SafeDeleteCoordinator deleteCoordinator = SafeDeleteCoordinator(
+    protectedLocations: ProtectedLocations(),
+  );
   late final HashCacheRepository cacheRepo;
 
-  final Map<String, ScannedFile> _keepOverrides = {}; // group hash -> chosen keep file
+  final Map<String, ScannedFile> _keepOverrides =
+      {}; // group hash -> chosen keep file
   final Set<String> _selectedForDeletion = {};
 
   HashCacheDatabase? _db;
@@ -51,8 +54,12 @@ class AppController extends ChangeNotifier {
 
   Future<void> init() async {
     settings = await _settingsRepo.load();
-    protectedLocations = ProtectedLocations(userDefined: settings.userProtectedLocations);
-    deleteCoordinator = SafeDeleteCoordinator(protectedLocations: protectedLocations);
+    protectedLocations = ProtectedLocations(
+      userDefined: settings.userProtectedLocations,
+    );
+    deleteCoordinator = SafeDeleteCoordinator(
+      protectedLocations: protectedLocations,
+    );
 
     _db = await HashCacheDatabase.open();
     cacheRepo = HashCacheRepository(_db!);
@@ -80,8 +87,12 @@ class AppController extends ChangeNotifier {
 
   Future<void> updateSettings(DuporaSettings newSettings) async {
     settings = newSettings;
-    protectedLocations = ProtectedLocations(userDefined: newSettings.userProtectedLocations);
-    deleteCoordinator = SafeDeleteCoordinator(protectedLocations: protectedLocations);
+    protectedLocations = ProtectedLocations(
+      userDefined: newSettings.userProtectedLocations,
+    );
+    deleteCoordinator = SafeDeleteCoordinator(
+      protectedLocations: protectedLocations,
+    );
     await _settingsRepo.save(settings);
     notifyListeners();
   }
@@ -135,10 +146,15 @@ class AppController extends ChangeNotifier {
 
   ScannedFile keepFileFor(DuplicateGroup group) {
     return _keepOverrides[group.fullHashHex] ??
-        applySmartSelection(group, settings.defaultSelectionStrategy, protectedLocations).keep;
+        applySmartSelection(
+          group,
+          settings.defaultSelectionStrategy,
+          protectedLocations,
+        ).keep;
   }
 
-  bool isSelectedForDeletion(ScannedFile file) => _selectedForDeletion.contains(file.path);
+  bool isSelectedForDeletion(ScannedFile file) =>
+      _selectedForDeletion.contains(file.path);
 
   void setKeepFile(DuplicateGroup group, ScannedFile file) {
     _keepOverrides[group.fullHashHex] = file;
@@ -175,7 +191,8 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _applyDefaultSelection() => applyStrategyToAllGroups(settings.defaultSelectionStrategy);
+  void _applyDefaultSelection() =>
+      applyStrategyToAllGroups(settings.defaultSelectionStrategy);
 
   int get selectedCount => _selectedForDeletion.length;
 
@@ -204,7 +221,10 @@ class AppController extends ChangeNotifier {
 
     final results = <DeleteResult>[];
     for (final file in toDelete) {
-      final result = await deleteCoordinator.delete(file, mustNotEqual: keepByPath[file.path]);
+      final result = await deleteCoordinator.delete(
+        file,
+        mustNotEqual: keepByPath[file.path],
+      );
       results.add(result);
       if (result.succeeded) _selectedForDeletion.remove(file.path);
     }

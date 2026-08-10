@@ -6,9 +6,28 @@ import 'storage_detector.dart';
 /// Filesystem type prefixes never worth scanning for user files: virtual,
 /// pseudo, or kernel-managed filesystems from `/proc/mounts`.
 const _virtualFsTypes = {
-  'proc', 'sysfs', 'devtmpfs', 'devpts', 'tmpfs', 'cgroup', 'cgroup2', 'pstore',
-  'securityfs', 'debugfs', 'tracefs', 'configfs', 'fusectl', 'mqueue', 'hugetlbfs',
-  'binfmt_misc', 'autofs', 'overlay', 'squashfs', 'efivarfs', 'bpf', 'rpc_pipefs',
+  'proc',
+  'sysfs',
+  'devtmpfs',
+  'devpts',
+  'tmpfs',
+  'cgroup',
+  'cgroup2',
+  'pstore',
+  'securityfs',
+  'debugfs',
+  'tracefs',
+  'configfs',
+  'fusectl',
+  'mqueue',
+  'hugetlbfs',
+  'binfmt_misc',
+  'autofs',
+  'overlay',
+  'squashfs',
+  'efivarfs',
+  'bpf',
+  'rpc_pipefs',
 };
 
 /// Parses `/proc/mounts` and reports real, user-relevant filesystems
@@ -50,7 +69,9 @@ class LinuxStorageDetector implements StorageDetector {
       // similar pseudo-devices are what's left after the fsType filter and
       // are excluded here.
       final looksLikeRealDevice =
-          device.startsWith('/dev/') || device.contains(':/') || device.startsWith('//');
+          device.startsWith('/dev/') ||
+          device.contains(':/') ||
+          device.startsWith('//');
       if (!looksLikeRealDevice) continue;
       if (mountPoint == '/boot' || mountPoint == '/boot/efi') continue;
 
@@ -59,15 +80,19 @@ class LinuxStorageDetector implements StorageDetector {
       final (total, free) = stats;
       if (total == 0) continue;
 
-      final isRemovable = mountPoint.startsWith('/media/') || mountPoint.startsWith('/run/media/');
-      volumes.add(StorageVolume(
-        rootPath: mountPoint,
-        label: mountPoint == '/' ? 'Root' : mountPoint.split('/').last,
-        type: isRemovable ? VolumeType.removable : VolumeType.fixed,
-        totalBytes: total,
-        freeBytes: free,
-        deviceId: device,
-      ));
+      final isRemovable =
+          mountPoint.startsWith('/media/') ||
+          mountPoint.startsWith('/run/media/');
+      volumes.add(
+        StorageVolume(
+          rootPath: mountPoint,
+          label: mountPoint == '/' ? 'Root' : mountPoint.split('/').last,
+          type: isRemovable ? VolumeType.removable : VolumeType.fixed,
+          totalBytes: total,
+          freeBytes: free,
+          deviceId: device,
+        ),
+      );
     }
     return volumes;
   }
