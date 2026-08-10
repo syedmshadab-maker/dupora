@@ -387,7 +387,11 @@ jobs:
           echo "Runner architecture: $(uname -m) (GitHub-hosted ubuntu-latest is x86_64 only - no cross-arch artifact is produced or claimed)"
 
       - name: Real Linux runtime smoke test (native engine load + duplicate scan)
-        run: xvfb-run -a flutter test integration_test/linux_native_engine_test.dart -d linux --release
+        run: >
+          xvfb-run -a flutter drive
+          --driver=test_driver/integration_test.dart
+          --target=integration_test/linux_native_engine_test.dart
+          -d linux --release
 
       - name: Package portable Linux archive
         run: |
