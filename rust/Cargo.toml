@@ -1,0 +1,35 @@
+[package]
+name = "dupora_engine"
+version = "0.1.0"
+edition = "2021"
+description = "Native performance engine for Dupora: streaming BLAKE3 hashing and duplicate-detection primitives"
+license = "MIT"
+publish = false
+
+[lib]
+name = "dupora_engine"
+# cdylib: dynamic library loaded by Dart FFI at runtime.
+# rlib:   allows `cargo test` / `cargo check` and Rust integration tests to link the crate normally.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+blake3 = { version = "1.5", features = ["rayon"] }
+memmap2 = "0.9"
+rayon = "1.10"
+thiserror = "1.0"
+num_cpus = "1.16"
+
+[dev-dependencies]
+# NOTE: intentionally no `tempfile` crate. It transitively pulls in
+# `getrandom` -> `windows-sys`, which needs a `dlltool`-capable mingw-w64
+# binutils to build raw-dylib import libs; this machine's rustup-provided
+# GNU toolchain only ships a linker (`ld`), not full binutils. We use a
+# ~20-line hand-rolled temp dir helper instead (see `src/test_util.rs` /
+# `tests/common/mod.rs`) rather than widen the toolchain requirement.
+hex = "0.4"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "unwind"
