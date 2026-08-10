@@ -28,40 +28,58 @@ cd ..
 flutter build windows --release
 ```
 
-**This machine's build environment could not complete the last step.**
-`flutter build windows` requires the MSVC toolchain (`flutter doctor`
-reports: *"Visual Studio is missing necessary components... Desktop
-development with C++"*), and this build ran with no admin rights and no
-package manager (`winget`/`choco`) available to install Visual Studio Build
-Tools non-interactively. Everything else was fully built and verified here:
+**Status: fully built and runtime-verified in this repository's own build
+session.** This environment initially had no MSVC toolchain and no admin
+rights or package manager (`winget`/`choco`) to install one interactively.
+The MSVC Build Tools 2022 bootstrapper (`vs_buildtools.exe --quiet --wait
+--norestart`, workloads `Microsoft.VisualStudio.Workload.VCTools` +
+`Microsoft.VisualStudio.Component.VC.Tools.x86.x64` +
+`Microsoft.VisualStudio.Component.Windows11SDK.22621`) was run directly and
+completed successfully despite the lack of an elevated admin token - `flutter
+doctor` subsequently reported `[√] Visual Studio - develop Windows apps
+(Visual Studio Build Tools 2022 17.14.37)` with no issues. From there:
 
-- The Rust engine builds, tests, lints, and formats cleanly (see below) -
-  it does **not** need MSVC, because this project's Rust toolchain targets
-  `x86_64-pc-windows-gnu` (rustup's bundled minimal mingw linker), not
-  `-msvc`. The resulting `dupora_engine.dll` uses the C ABI, which Dart's
-  `dart:ffi` loads at runtime via `LoadLibrary` regardless of which linker
-  produced it.
-- `flutter analyze` and `flutter test` (48 tests) both pass - `flutter
-  test` runs against a prebuilt "flutter tester" engine binary shipped with
-  the SDK, which is independent of the MSVC/CMake toolchain that only
-  `flutter build windows`/`flutter run -d windows` need.
+- `flutter build windows --release` succeeded:
+  `build\windows\x64\runner\Release\dupora.exe` (91 KB launcher; the real
+  weight is in the bundled DLLs below).
+- The release directory contains `dupora.exe`, `dupora_engine.dll` (1.37 MB,
+  the real Rust engine), `flutter_windows.dll`, `sqlite3.dll`,
+  `sqlite3_flutter_libs_plugin.dll`, and `file_selector_windows_plugin.dll`
+  - confirmed by direct directory listing, not just build-log inference.
+- The `windows/CMakeLists.txt` `install(FILES ...)` rule that bundles
+  `dupora_engine.dll` next to `Runner.exe` (added earlier in this project,
+  alongside the Flutter-generated rules for `flutter_windows.dll` and
+  plugin libraries) is confirmed working: that's how the DLL got there.
+- **The compiled executable was launched and driven end-to-end** via
+  `flutter test integration_test/app_test.dart -d windows` (see TESTING.md
+  for full detail): it added a real folder, scanned it with the real
+  native BLAKE3 engine, correctly identified the one genuine duplicate pair
+  while excluding an unrelated file, applied smart selection, and deleted
+  the duplicate through the real Windows Recycle Bin confirmation dialog -
+  verified by checking the actual filesystem afterward (deleted file gone,
+  kept file present, unrelated file untouched). A second test verified
+  mid-scan cancellation. Both passed.
 
-To finish a Windows release build on a machine with the right permissions:
+If you're setting this up fresh on a machine that already has MSVC (e.g. a
+normal dev workstation or GitHub Actions' `windows-latest` runner), you only
+need the three commands at the top of this section. If you're in an
+environment as constrained as this one was, the install command that worked
+here was:
 
 ```powershell
-winget install --id Microsoft.VisualStudio.2022.BuildTools --silent --override "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+$env:USERPROFILE\vs_buildtools.exe --quiet --wait --norestart --nocache `
+  --add Microsoft.VisualStudio.Workload.VCTools `
+  --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+  --add Microsoft.VisualStudio.Component.Windows11SDK.22621 `
+  --includeRecommended
+# (download vs_buildtools.exe first: https://aka.ms/vs/17/release/vs_buildtools.exe)
 flutter doctor    # confirm the Visual Studio check now passes
 cd rust && cargo build --release && cd ..
 flutter build windows --release
 ```
 
-`windows/CMakeLists.txt` has an `install(FILES ...)` rule (alongside the
-Flutter-generated ones for `flutter_windows.dll` and plugin libraries) that
-bundles `rust/target/release/dupora_engine.dll` next to `Runner.exe`, so a
-completed `flutter build windows` needs no manual DLL-copying step. This
-rule could not be exercised end-to-end in this session (no MSVC to run the
-CMake build at all - see above) but follows the exact same pattern as the
-Flutter-generated rules immediately above it in the same file.
+This installed ~3.4 GB to `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools`
+and took about 12 minutes on this machine's network connection.
 
 ## Android
 

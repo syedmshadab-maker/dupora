@@ -67,8 +67,12 @@ not implemented in this pass - see Known Limitations.
 
 This build ran entirely on a single Windows development VM with no HDD, no
 USB 2.0 device, and no multi-terabyte dataset available to test against.
-The following are therefore *design intentions backed by unit/integration
-correctness tests*, not measured performance claims:
+The compiled Windows release executable was verified end-to-end at small
+scale (a handful of files) via `integration_test/app_test.dart` - see
+TESTING.md - which proves *functional correctness* of the real exe
+(scanning, hashing, deletion all genuinely work), but that test says
+nothing about throughput at scale. The following remain *design intentions
+backed by correctness tests*, not measured performance claims:
 
 - Actual files/sec and MB/sec throughput at the 10,000 / 100,000 /
   1,000,000-file scales the spec targets.

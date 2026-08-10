@@ -34,30 +34,48 @@ full-file BLAKE3 - never filename, metadata, or partial-content heuristics.
 
 ## Project status - what's real vs. what's unverified
 
-This was built in a single sandboxed Windows session with **no admin
-rights, no macOS/Linux/Android hardware, and no package manager**
-available. Everything below is stated precisely rather than rounded up:
+This was built in a single sandboxed session with **no macOS/Linux
+hardware and no Android device/emulator** available. Everything below is
+stated precisely rather than rounded up:
 
-**Actually built, run, and passing in this environment:**
+**Windows: fully built and runtime-verified, including the actual
+production executable.**
 - The full Rust engine: builds, 24/24 tests pass (including official
   BLAKE3 golden vectors), `cargo clippy -D warnings` clean, `cargo fmt
   --check` clean.
 - The full Dart application: `flutter analyze` clean, `dart format` clean,
   48/48 tests pass, including an end-to-end pipeline test against real
   files on disk and the real compiled native engine (not mocked).
+- The MSVC Build Tools this environment initially lacked were installed
+  directly (`vs_buildtools.exe --quiet --wait`, no admin token needed in
+  practice) and `flutter build windows --release` succeeded:
+  `build\windows\x64\runner\Release\dupora.exe`, with `dupora_engine.dll`,
+  `sqlite3.dll`, and all plugin DLLs confirmed bundled next to it by direct
+  directory inspection.
+- **The compiled executable was launched and driven end-to-end** via
+  Flutter's `integration_test` package (`flutter test
+  integration_test/app_test.dart -d windows`), which runs against the real
+  running app's real widget tree rather than a mock: it added a real
+  folder, tapped the real "Start Scan" button, scanned with the real
+  BLAKE3 engine, correctly grouped two identical files while excluding an
+  unrelated one, applied smart selection, tapped the real delete button,
+  confirmed the real "Move to Trash?" dialog, and - verified directly
+  against the filesystem afterward - the duplicate was gone, the kept copy
+  and the unrelated file were untouched. A second test verified mid-scan
+  cancellation. Both passed. Full detail in TESTING.md.
 - Windows storage-volume detection (`GetLogicalDrives`/`GetDriveType`/
-  `GetDiskFreeSpaceEx`) and Windows Recycle Bin deletion
-  (`SHFileOperationW`) - both real Win32 calls, exercised by the app on
-  this machine.
-- **Android: cross-compiled and packaged for real.** The Rust engine was
-  cross-compiled for `aarch64-linux-android` against NDK 28.2.13676358,
-  staged into `jniLibs`, and both `flutter build apk --debug` and `flutter
-  build apk --release` succeeded (23.4 MB, R8-minified) - inspecting both
-  APKs confirms `libdupora_engine.so` is bundled inside alongside Flutter's
-  own native libraries. Kotlin (`StorageChannel.kt`, `SafChannel.kt`),
-  Dart, and Rust all compile and package together correctly for a real
-  Android target. What's *not* verified is runtime behavior on a
-  device/emulator - see BUILD.md.
+  `GetDiskFreeSpaceEx`) and Recycle Bin deletion (`SHFileOperationW`) are
+  exercised as part of that same real run.
+
+**Android: cross-compiled and packaged for real; not device-tested.** The
+Rust engine was cross-compiled for `aarch64-linux-android` against NDK
+28.2.13676358, staged into `jniLibs`, and both `flutter build apk --debug`
+and `flutter build apk --release` succeeded (23.4 MB, R8-minified) -
+inspecting both APKs confirms `libdupora_engine.so` is bundled inside
+alongside Flutter's own native libraries. Kotlin (`StorageChannel.kt`,
+`SafChannel.kt`), Dart, and Rust all compile and package together
+correctly for a real Android target. What's *not* verified is runtime
+behavior on a physical device or emulator - see BUILD.md.
 
 **Code-complete, architecturally integrated, but not runtime-verified
 here** (see BUILD.md/TESTING.md for exactly why, per platform):
@@ -70,17 +88,16 @@ here** (see BUILD.md/TESTING.md for exactly why, per platform):
   *at runtime* - the Kotlin/Dart/Rust code compiles and packages correctly
   into a working APK (see above), but no Android device or emulator
   session was used to actually tap through the SAF picker flow.
-- A literal `flutter build windows` release `.exe` - blocked by a missing
-  MSVC toolchain with no way to install one non-interactively in this
-  environment. Exact fix command is in BUILD.md.
 
 **Deliberately scoped down:**
 - Video-frame and PDF-page thumbnails render a file-type icon instead of a
   decoded frame/page (no bundled ffmpeg/pdfium decoder); image thumbnails
   are fully real, decoded via the pure-Dart `image` package.
-- No dedicated `criterion` throughput benchmark harness - see
-  PERFORMANCE.md for what performance claims are and aren't backed by
-  measurement in this build.
+- No dedicated `criterion` throughput benchmark harness, and the Windows
+  integration test above ran at small scale (a handful of files) to verify
+  correctness, not at the 10K/100K/1M-file scale the spec targets for
+  performance - see PERFORMANCE.md for what performance claims are and
+  aren't backed by measurement in this build.
 
 None of the above is used to claim a false "it's done" - see each linked
 document for specifics, and CHANGELOG.md for the full list.
@@ -93,8 +110,8 @@ cd dupora
 cd rust && cargo build --release && cd ..
 flutter pub get
 dart run build_runner build --delete-conflicting-outputs
-flutter test              # works today, on this machine, right now
-flutter run -d windows    # needs the MSVC Build Tools fix in BUILD.md first
+flutter test              # 48/48 passing
+flutter run -d windows    # requires MSVC Build Tools - see BUILD.md
 ```
 
 See **BUILD.md** for every platform's exact build commands (including the
@@ -106,16 +123,14 @@ for the delete-safety and untrusted-input model.
 
 ## Known Limitations
 
-- No MSVC toolchain in the build environment used for this project → no
-  literal Windows release `.exe` was produced (Rust itself doesn't need
-  MSVC here; only Flutter's Windows desktop embedder does). Fix: BUILD.md.
 - macOS, Linux, and Android native code paths are written against their
   documented platform APIs but were not exercised on real hardware/emulator
-  in this build session.
+  in this build session (Windows *was* - see above).
 - Video/PDF thumbnails are file-type icons, not rendered frames/pages.
 - The 64 MiB/4-core parallel-hashing threshold is a documented constant,
   not a value tuned against measured throughput on real HDD/SSD/USB
-  hardware.
+  hardware; the Windows integration test verified correctness at small
+  scale, not throughput at the scales the spec targets.
 - Android's storage-permission flow (SAF tree picking) is implemented as a
   platform-channel bridge but not yet wired into a dedicated Home-screen UI
   affordance for Android specifically - the Home screen's "Add Folder"
@@ -124,13 +139,15 @@ for the delete-safety and untrusted-input model.
 
 ## Release instructions
 
-See **BUILD.md** for the complete, per-platform command sequence. In
-summary, for the platform verified in this build (Windows, once MSVC is
-installed):
+See **BUILD.md** for the complete, per-platform command sequence. For
+Windows (fully verified in this build):
 
 ```powershell
-winget install --id Microsoft.VisualStudio.2022.BuildTools --silent --override "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
 cd rust && cargo build --release && cd ..
 flutter build windows --release
 # Output: build\windows\x64\runner\Release\dupora.exe
+# (plus dupora_engine.dll, sqlite3.dll, and plugin DLLs bundled alongside it)
 ```
+
+Requires the MSVC Build Tools ("Desktop development with C++" workload);
+see BUILD.md if `flutter doctor` reports Visual Studio as missing.

@@ -3,12 +3,13 @@
 ## Current status
 
 ```
-cargo test        24 / 24 passing   (rust/)
-flutter test       48 / 48 passing   (test/)
-flutter analyze     0 issues
-cargo clippy         0 warnings (-D warnings)
-dart format          clean
-cargo fmt --check    clean
+cargo test                                       24 / 24 passing   (rust/)
+flutter test                                      48 / 48 passing   (test/)
+flutter test integration_test/app_test.dart -d windows   2 / 2 passing   (real compiled exe)
+flutter analyze                                    0 issues
+cargo clippy                                         0 warnings (-D warnings)
+dart format                                          clean
+cargo fmt --check                                    clean
 ```
 
 Run everything yourself:
@@ -126,6 +127,68 @@ convenience dependency.
   `updateSettings` with the expected value; protected locations render and
   are removable.
 
+### Production-executable integration test (real compiled app)
+
+`integration_test/app_test.dart`, run via
+`flutter test integration_test/app_test.dart -d windows`, is a different
+category from everything above: it builds and launches the **actual
+Windows executable** and drives the **real widget tree** of that running
+process (via `IntegrationTestWidgetsFlutterBinding`, not a mocked test
+harness). Nothing here is a fake, a mock, or a headless simulation -
+this is the production-artifact smoke test.
+
+What it verifies, against a real app instance:
+
+1. **Folder selection** → `AppController.addCustomFolder` (same method the
+   "Add Folder" button calls; integration_test cannot drive the native OS
+   file-picker dialog since it lives outside the Flutter engine, so the
+   test calls the app's own method directly rather than faking the dialog).
+2. **A real tap on the real "Start Scan" button**, which runs the actual
+   `ScanEngine` → `HashWorkerPool` → `dart:ffi` → the real, bundled
+   `dupora_engine.dll`, hashing real files with real BLAKE3.
+3. **Duplicate detection correctness** against known ground truth: two
+   files with identical content are grouped together; a third, different
+   file is confirmed absent from every group; zero scan errors.
+4. **Smart selection**: exactly one of the two duplicates is pre-selected
+   for deletion, the other (the kept copy) is not.
+5. **A real tap on the real delete button**, which shows the real
+   Windows-specific confirmation dialog (`"Move to Trash?"` - proving the
+   app correctly detected it's running with real Recycle Bin support), and
+   a real tap on `"Move to Trash"`.
+6. **The actual filesystem effect**, checked directly (not inferred): the
+   deleted duplicate is gone from disk, the kept copy still exists, and an
+   unrelated file elsewhere in the same folder was untouched.
+7. A second test scans 25 files sharing content and calls
+   `cancelScan()` almost immediately, verifying `ScanProgress.isCancelled`
+   becomes `true` - the real cancellation path, not a simulated one.
+
+Both tests passed:
+
+```
+00:00 +0: production build: scan, detect duplicates, delete to Recycle Bin
+00:05 +1: production build: cancellation stops a scan cleanly
+00:08 +2: All tests passed!
+```
+
+**Safety note:** every file this test reads, hashes, and deletes is created
+by the test itself inside a fresh `Directory.systemTemp.createTemp()`
+directory and cleaned up in `addTearDown`. It never touches, selects, or
+deletes anything outside that directory - deliberately, since this
+environment has real user files on other drives that must never be at risk
+from an automated test run.
+
+**How this was verified without reliable screen capture:** this build
+environment is a remote/headless VM where OS-level screenshotting does not
+reliably reflect the app's actual rendered window (it captures whatever the
+remote viewer happens to show), and Flutter's Windows accessibility tree
+was not reliably queryable via UI Automation or MSAA either. Rather than
+drive the app blindly with synthetic keyboard/mouse input at guessed
+screen coordinates - which would have been unable to verify what was
+actually on screen before an irreversible action like a delete - this test
+uses Flutter's own `integration_test` package, which operates on the real
+widget tree from inside the running process itself. This is both more
+reliable and safer than OS-level UI automation would have been.
+
 ## A hang bug this test suite caught
 
 `file_discovery.dart`'s `ReceivePort` never completes its own `Stream` -
@@ -151,8 +214,16 @@ reminder that pure unit tests are not a substitute for end-to-end coverage.
   contract but is unverified end-to-end.
 - **macOS `TrashChannel.swift`** - no macOS host was available to compile
   or exercise it.
-- **A literal `flutter build windows` release binary** - blocked by a
-  missing MSVC toolchain in this environment; see BUILD.md for the exact
-  remediation command. `flutter test` uses a prebuilt engine binary
-  independent of this toolchain, which is why the Dart test suite above
-  still runs and passes on this machine.
+- **Windows is no longer in this list.** An earlier draft of this document
+  said the Windows release build and its runtime behavior were unverified;
+  that's since been resolved - see BUILD.md and the integration-test
+  section above. (One dead end worth recording: `dupora_engine.dll` and
+  `sqlite3.dll` only get `LoadLibrary`'d into the process on first actual
+  use - the first hash call and the first SQL query, respectively - not at
+  `DynamicLibrary.open`/`NativeDatabase.open` call time. Watching for those
+  DLLs in the process's loaded-module list immediately after launch
+  produced a false "it's hung" signal during debugging; a diagnostic
+  `print()` trace through `AppController.init()` showed every step
+  completing in well under a second, and the integration test above
+  confirms both DLLs really do load correctly once the app actually scans
+  and caches something.)
