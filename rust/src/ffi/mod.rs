@@ -11,12 +11,19 @@
 //! Every function is wrapped in `catch_unwind`: a Rust panic must never
 //! unwind across an `extern "C"` boundary (undefined behavior).
 
+mod stream_hasher;
+
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::Path;
 use std::slice;
 
 use crate::error::StatusCode;
 use crate::hashing::{self, CancelToken, ProgressCounter, DIGEST_LEN};
+
+pub use stream_hasher::{
+    dupora_stream_hasher_abort, dupora_stream_hasher_finalize, dupora_stream_hasher_new,
+    dupora_stream_hasher_update,
+};
 
 /// # Safety
 /// `path_ptr` must point to `path_len` valid UTF-8 bytes.

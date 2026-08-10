@@ -35,6 +35,39 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
+  # State management: plain ChangeNotifier + provider. Chosen over Riverpod
+  # for this project because the app has few, well-scoped long-lived
+  # controllers (scan engine, settings) rather than a large dependency graph
+  # of small providers - provider's simplicity avoids codegen and keeps the
+  # architecture easy to follow. See ARCHITECTURE.md.
+  provider: ^6.1.2
+
+  # Embedded database for the hash cache. Chosen over Isar: Isar's last
+  # release predates this project's Dart/Flutter SDKs and its maintenance
+  # has stalled, which is a correctness/longevity risk for a persistent
+  # cache that must survive SDK upgrades. Drift wraps SQLite (a
+  # transactional, battle-tested, actively maintained embedded database)
+  # with a type-safe Dart query layer. See ARCHITECTURE.md.
+  drift: ^2.21.0
+  sqlite3_flutter_libs: ^0.5.27
+  sqlite3: ^2.7.4
+  path_provider: ^2.1.5
+  path: ^1.9.0
+
+  # Windows volume enumeration, Recycle Bin (SHFileOperation), and other
+  # Win32 calls not covered by pure-Dart/Flutter APIs.
+  win32: ^5.11.0
+  ffi: ^2.1.4
+
+  # Pure-Dart image decoding for thumbnail generation; no native codec
+  # dependency, works identically on every target platform.
+  image: ^4.5.4
+
+  shared_preferences: ^2.5.3
+  intl: ^0.20.2
+  logging: ^1.3.0
+  meta: ^1.15.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -45,6 +78,8 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  drift_dev: ^2.21.0
+  build_runner: ^2.4.13
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
