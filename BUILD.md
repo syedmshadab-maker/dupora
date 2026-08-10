@@ -103,17 +103,25 @@ confirmed to contain the native engine.** In this session:
   it alongside Flutter's own `libflutter.so` and `libsqlite3.so` - i.e. the
   Kotlin (`StorageChannel.kt`, `SafChannel.kt`), Dart, and Rust pieces all
   compile and package together correctly for a real Android target.
-- A `flutter build apk --release` (arm64 only) was also run; see the git
-  history for this build's outcome.
+- `flutter build apk --release --target-platform android-arm64` then
+  succeeded too: `build/app/outputs/flutter-apk/app-release.apk`, 23.4 MB,
+  R8-minified, confirmed (by inspecting the archive) to still contain
+  `lib/arm64-v8a/libdupora_engine.so`.
 
 **What remains unverified:** no physical Android device or running
-emulator session was used, so while the APK is built and contains the
+emulator session was used, so while both APKs are built and contain the
 correct native code, the SAF/storage `MethodChannel` code paths have not
 been exercised at *runtime* (tapping "Add Folder," picking a SAF tree,
-scanning it, etc.) - see TESTING.md. The armv7 and x86_64 ABIs were also
-cross-compiled in this session (`android/app/src/main/jniLibs/armeabi-v7a/`,
-`.../x86_64/`) for a multi-ABI release build, but the APK inspected above
-was built arm64-only.
+scanning it, etc.) - see TESTING.md.
+
+**ABI coverage:** the release APK above is `arm64-v8a` only - the ABI real
+Android phones/tablets have used since 2019 and the right default for a
+build-verification pass. `armv7-linux-androideabi` (legacy 32-bit devices)
+and `x86_64-linux-android` (emulators) cross-compile via the identical
+`.cargo/config.toml` + `CC_<target>` pattern documented above; producing a
+universal multi-ABI release is one more `cargo build --target` invocation
+per ABI plus `flutter build apk --release` (no `--target-platform` filter)
+away, not attempted for all three ABIs together in this session.
 
 ## macOS
 

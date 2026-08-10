@@ -51,12 +51,13 @@ available. Everything below is stated precisely rather than rounded up:
   this machine.
 - **Android: cross-compiled and packaged for real.** The Rust engine was
   cross-compiled for `aarch64-linux-android` against NDK 28.2.13676358,
-  staged into `jniLibs`, and `flutter build apk` succeeded - inspecting the
-  resulting APK confirms `libdupora_engine.so` is bundled inside it
-  alongside Flutter's own native libraries. Kotlin (`StorageChannel.kt`,
-  `SafChannel.kt`), Dart, and Rust all compile and package together
-  correctly for a real Android target. What's *not* verified is runtime
-  behavior on a device/emulator - see BUILD.md.
+  staged into `jniLibs`, and both `flutter build apk --debug` and `flutter
+  build apk --release` succeeded (23.4 MB, R8-minified) - inspecting both
+  APKs confirms `libdupora_engine.so` is bundled inside alongside Flutter's
+  own native libraries. Kotlin (`StorageChannel.kt`, `SafChannel.kt`),
+  Dart, and Rust all compile and package together correctly for a real
+  Android target. What's *not* verified is runtime behavior on a
+  device/emulator - see BUILD.md.
 
 **Code-complete, architecturally integrated, but not runtime-verified
 here** (see BUILD.md/TESTING.md for exactly why, per platform):

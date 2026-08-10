@@ -52,3 +52,6 @@ app.*.map.json
 # the BUILD.md workflow - regenerate via `cargo build --target ...`, don't
 # commit the binary.
 /android/app/src/main/jniLibs/
+
+# Claude Code harness internal state (not project source)
+.claude/
