@@ -234,24 +234,81 @@ cd rust
 cargo build --release --target aarch64-apple-darwin   # Apple Silicon
 cargo build --release --target x86_64-apple-darwin    # Intel
 cd ..
-lipo -create -output rust/target/release/libdupora_engine_universal.dylib \
+lipo -create -output rust/target/release/libdupora_engine.dylib \
   rust/target/aarch64-apple-darwin/release/libdupora_engine.dylib \
   rust/target/x86_64-apple-darwin/release/libdupora_engine.dylib
 flutter build macos --release
 ```
 
-**Compiles successfully on a real `macos-latest` GitHub Actions runner**
-(verified via `.github/workflows/release.yml`, run 31437939750, after
-fixing `macos/Runner.xcodeproj/project.pbxproj` to actually register
-`macos/Runner/TrashChannel.swift` in the Runner target's build phase - it
-existed in the repo but Xcode was silently never compiling it, which
-`flutter build macos --release` caught immediately as `error: cannot find
-'TrashChannel' in scope`). This is **build verification only**: no macOS
-hardware exists in this project's build sessions, so the Trash
-`MethodChannel` itself, and the app generally, have never been launched or
-exercised at runtime on macOS. It also isn't attached to GitHub Releases
-yet - see "Automated GitHub Releases" below for why (the native engine
-library isn't bundled into the packaged `.app` for this platform).
+The lipo output must be named plain `libdupora_engine.dylib` at
+`rust/target/release/` (not e.g. `..._universal.dylib`) - that's the exact
+path `macos/Runner.xcodeproj`'s "Bundle Framework" copy-files build phase
+references when embedding it into the app bundle (see below).
+
+Not built or run on local hardware in any of this project's sessions - no
+macOS machine has ever been available here - but **fully built, bundled,
+and runtime-verified for real** on a GitHub-hosted `macos-latest`
+(Apple Silicon host, universal arm64+x86_64 build) runner, via
+`.github/workflows/release.yml`'s `build-macos` job
+(GitHub Actions run 31462917213, 2026-08-11 - passed on the first real
+attempt, unlike Linux's equivalent fix which needed three rounds of
+CI/test-tooling debugging first; the lessons from that - `flutter drive
+--profile` not `flutter test --release`, and a `pumpUntil`-based wait
+instead of a single `pump()` before checking for an intermediate screen -
+were applied directly here):
+
+- **Native engine bundling**: `rust/target/release/libdupora_engine.dylib`
+  (a genuine universal binary - `lipo -create` combining
+  `aarch64-apple-darwin` and `x86_64-apple-darwin` release builds,
+  confirmed via `lipo -info` in CI: `Architectures in the fat file: ...
+  are: x86_64 arm64`) is embedded by `macos/Runner.xcodeproj`'s
+  previously-empty "Bundle Framework" `PBXCopyFilesBuildPhase`
+  (`dstSubfolderSpec = 10`, i.e. `Contents/Frameworks/`) - a
+  Flutter-template-provided phase that already existed for exactly this
+  purpose, just with nothing in it. This was the actual gap: the compiled
+  dylib existed but nothing copied it into the packaged `.app`.
+- **FFI loader**: `lib/core/native/dupora_native_bindings.dart`'s macOS
+  branch now resolves `Contents/Frameworks/libdupora_engine.dylib` via an
+  explicit, unambiguous path computed from `Platform.resolvedExecutable`'s
+  directory (`<Contents/MacOS>/../Frameworks/libdupora_engine.dylib`),
+  the same approach already used for Linux, rather than relying only on a
+  bare `dlopen("libdupora_engine.dylib")` and the dylib's own install
+  name/`@rpath` resolution. Windows, Linux, and Android loading are
+  unchanged.
+- **Runtime verification**: `integration_test/macos_native_engine_test.dart`
+  drives the actual compiled `.app` via `flutter drive --profile`
+  (`--profile`, not `--release`, because Flutter Driver hard-refuses
+  `--release` entirely on desktop platforms - see the Linux section's
+  "Automated GitHub Releases" note for the exact error text; macOS
+  runners have a real GUI session, so no `xvfb`-style headless-display
+  workaround is needed) - it calls the native engine directly first
+  (proving `DynamicLibrary.open` succeeds with no fallback needed), then
+  runs a real scan against two genuinely identical files and one
+  same-size-but-different-content file, and asserts the duplicate pair is
+  correctly found while the different-content file is correctly excluded.
+  **Actually passed**, real CI log: `Dupora native engine loaded
+  successfully. Version: 0.1.0`, then `macOS native-engine runtime
+  verification passed: engine loaded, BLAKE3 hashing executed, duplicate
+  pair correctly identified, same-size/different-content pair correctly
+  excluded`, then `All tests passed!`.
+- **Architecture**: universal (arm64 + x86_64) - both the executable and
+  the embedded dylib are genuine Mach-O universal binaries, confirmed via
+  `lipo -info`/`file` in CI, not a claim.
+- **Portable package**: CI packages the verified `.app` as
+  `Dupora-macOS-vX.Y.Z.zip` (`ditto -c -k --sequesterRsrc --keepParent
+  dupora.app ...` - the Apple-recommended way to zip a `.app` bundle,
+  preserving resource forks/metadata `zip` alone can lose). To run it:
+  unzip, then move `dupora.app` to `/Applications` (or run in place).
+  **Not code-signed or notarized** (no Apple Developer certificate
+  available in this pipeline) - macOS Gatekeeper will show an
+  unidentified-developer warning on first launch; right-click → Open
+  bypasses it. Not included in the already-published `v1.0.0` release;
+  attached automatically starting with the next tag.
+- What's still genuinely unverified: the Trash `MethodChannel`
+  (`TrashChannel.swift`) itself isn't exercised by this test (it covers
+  scan/hash/detect, not delete), and macOS `StorageManager`-equivalent
+  volume detection is untested here too - both remain real limitations,
+  not silently claimed as covered.
 
 ## Linux
 
@@ -381,24 +438,21 @@ version consistent.
 
 **What CI actually produces vs. what it doesn't:**
 
-- **Windows, Android, and Linux are the three release-gating platforms** -
-  a release is only published once all three succeed. The Windows job's
-  installer is genuinely install/launch/uninstall-tested, and the Linux
-  job's bundle is genuinely runtime-tested (real native-engine load, real
-  BLAKE3 hashing, real duplicate detection), on the runner itself before
-  anything is published - not just compiled. No `continue-on-error`
-  anywhere in this set: if any of the three fails, it fails honestly and
-  the release does not happen.
-- **macOS is built on a GitHub-hosted runner as a compile-health check
-  only** (`continue-on-error: true`, so a failure here never blocks the
-  release) and its output is deliberately *not* attached to a release: it
-  compiles (fixed 2026-08-11, run 31437939750 - see the macOS section
-  above), but its packaged `.app` doesn't bundle the native engine library
-  yet, the same gap Linux had until this fix (run ID recorded in the
-  Linux section above). This is not a claim that macOS support doesn't
-  work at the source level (see README's Known Limitations) - only that
-  the *packaged, distributable* artifact isn't ready yet, for one
-  precisely identified, already-solved-once-for-Linux reason.
+- **All four platforms - Windows, Android, Linux, and macOS - are
+  release-gating.** A release is only published once all four succeed.
+  The Windows job's installer is genuinely install/launch/uninstall-tested;
+  the Linux and macOS jobs' bundles are genuinely runtime-tested (real
+  native-engine load, real BLAKE3 hashing, real duplicate detection) on
+  the runner itself before anything is published - not just compiled. No
+  `continue-on-error` anywhere in this set: if any of the four fails, it
+  fails honestly and the release does not happen.
+- This is not a claim that any platform's *support* is more or less real
+  than another - all four are written against their documented platform
+  APIs (see README's Known Limitations for what's genuinely still
+  unverified per platform, e.g. on-device Android testing, macOS
+  Trash/volume-detection runtime testing) - only that all four now
+  produce a *packaged, distributable* artifact that's actually been shown
+  to work, not just compile.
 - The workflow also supports manual `workflow_dispatch` runs (for testing
   the pipeline itself without cutting a release) - these compute a
   placeholder `0.0.0-dev.<run number>` version and run every job above,

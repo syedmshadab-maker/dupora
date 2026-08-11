@@ -10,6 +10,8 @@ flutter test integration_test/dataset_test.dart -d windows  1 / 1 passing   (rea
 flutter test integration_test/stress_test.dart -d windows   1 / 1 passing   (real compiled exe)
 flutter drive --target=integration_test/linux_native_engine_test.dart
   -d linux --profile (GitHub Actions ubuntu-latest)          1 / 1 passing   (real compiled bundle)
+flutter drive --target=integration_test/macos_native_engine_test.dart
+  -d macos --profile (GitHub Actions macos-latest)            1 / 1 passing   (real compiled .app)
 flutter analyze                                              0 issues
 cargo clippy                                                   0 warnings (-D warnings)
 dart format                                                    clean
@@ -40,6 +42,12 @@ flutter test integration_test/stress_test.dart -d windows
 # all. See BUILD.md.
 xvfb-run -a flutter drive --driver=test_driver/integration_test.dart \
   --target=integration_test/linux_native_engine_test.dart -d linux --profile
+
+# Requires a macOS build environment (Xcode) - a real GUI session exists
+# on GitHub's macos-latest runners, so no xvfb-equivalent is needed. Same
+# --profile reasoning as Linux. See BUILD.md.
+flutter drive --driver=test_driver/integration_test.dart \
+  --target=integration_test/macos_native_engine_test.dart -d macos --profile
 ```
 
 ## Rust (`rust/`)
@@ -306,6 +314,34 @@ The test itself:
 
 No mocks anywhere in this path - real dlopen, real BLAKE3, real
 filesystem, real widget tree.
+
+### `integration_test/macos_native_engine_test.dart` - macOS native-engine bundling verification
+
+Same bug, same shape of fix, same test structure as the Linux one above:
+the macOS `.app` never embedded `libdupora_engine.dylib` (see BUILD.md's
+macOS section for the Xcode-project/FFI-loader fix). Run via `flutter
+drive --profile` against the actual compiled `.app` on GitHub Actions
+(`macos-latest`) - no headless-display workaround needed, unlike Linux,
+since macOS runners have a real GUI session.
+
+**Passed on the first real CI attempt** (GitHub Actions run 31462917213,
+2026-08-11) - applying the lessons already learned fixing Linux's
+identical test (`flutter drive --profile` from the start, not `flutter
+test --release`; `pumpUntil` for the results screen instead of a single
+`pump()` before checking an intermediate screen) meant this one didn't
+need multiple rounds of CI debugging. Real log:
+`Dupora native engine loaded successfully. Version: 0.1.0`, then `macOS
+native-engine runtime verification passed: engine loaded, BLAKE3 hashing
+executed, duplicate pair correctly identified, same-size/different-content
+pair correctly excluded`, then `All tests passed!`. The build's `Verify
+the native engine is bundled` step also confirmed, via `lipo -info`, that
+both the executable and the embedded dylib are genuine universal
+(arm64 + x86_64) Mach-O binaries, not a single-architecture build.
+
+Same test steps as Linux's version: call the native engine directly first
+(no UI, proves `DynamicLibrary.open` succeeds), create the same controlled
+dataset, drive a real scan through the real widget tree, assert correct
+duplicate detection. No mocks.
 
 ## A hang bug this test suite caught
 
