@@ -139,7 +139,17 @@ class DuporaNativeBindings {
     if (Platform.isWindows) {
       candidates.add('$libraryBaseName.dll');
     } else if (Platform.isMacOS) {
-      candidates.add('lib$libraryBaseName.dylib');
+      final fileName = 'lib$libraryBaseName.dylib';
+      candidates.add(fileName);
+      // The release bundle embeds the engine into Contents/Frameworks/
+      // (see macos/Runner.xcodeproj's "Bundle Framework" copy-files build
+      // phase), a sibling of Contents/MacOS/ where the running executable
+      // lives. As with Linux, resolve that explicitly and unambiguously
+      // relative to the executable rather than depending on a bare
+      // dlopen(fileName) and the dylib's own install name / @rpath
+      // resolution for a plain runtime dlopen call.
+      final exeDir = File(Platform.resolvedExecutable).parent.path;
+      candidates.add('$exeDir/../Frameworks/$fileName');
     } else if (Platform.isLinux) {
       final fileName = 'lib$libraryBaseName.so';
       candidates.add(fileName);

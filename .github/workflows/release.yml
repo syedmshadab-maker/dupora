@@ -280,21 +280,17 @@ jobs:
           if-no-files-found: error
 
   # ---------------------------------------------------------------------
-  # macOS / Linux: compile-verification only. These platforms' native
-  # engine libraries are not yet wired into the app package (no
-  # install/Copy-Files step bundles libdupora_engine.dylib/.so the way
-  # windows/CMakeLists.txt does for the .dll - see BUILD.md). A build
-  # that merely compiles would still fail at runtime, so these jobs
-  # deliberately do NOT produce a release artifact - they only prove
-  # (or disprove, for real, on a real runner) that the Flutter/CMake/
-  # Xcode build itself succeeds. continue-on-error so a failure here
-  # never blocks the Windows/Android release.
+  # macOS: build the release bundle, verify the native engine is actually
+  # embedded inside it, and drive the real compiled app through a genuine
+  # runtime smoke test (native engine load, real BLAKE3 hashing, real
+  # duplicate detection - integration_test/macos_native_engine_test.dart).
+  # No continue-on-error: a macOS failure here fails the job honestly and
+  # blocks the release, same as Windows/Android/Linux.
   # ---------------------------------------------------------------------
   build-macos:
-    name: Build macOS (compile check only, not released)
+    name: Build macOS release + native-engine verification
     runs-on: macos-latest
     needs: [prepare, quality-gate]
-    continue-on-error: true
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
     steps:
@@ -325,6 +321,51 @@ jobs:
           flutter build macos --release
           --build-name=$VERSION
           --build-number=$GITHUB_RUN_NUMBER
+
+      - name: Verify the native engine is bundled
+        run: |
+          APP="build/macos/Build/Products/Release/dupora.app"
+          DYLIB="$APP/Contents/Frameworks/libdupora_engine.dylib"
+          if [ ! -f "$DYLIB" ]; then
+            echo "libdupora_engine.dylib missing from $APP/Contents/Frameworks/ - bundling regression"
+            find "$APP/Contents" -maxdepth 2
+            exit 1
+          fi
+          echo "Bundle layout:"
+          find "$APP/Contents" -maxdepth 2
+          echo "--- native engine ---"
+          file "$DYLIB"
+          lipo -info "$DYLIB" || true
+          echo "--- executable ---"
+          file "$APP/Contents/MacOS/dupora"
+          lipo -info "$APP/Contents/MacOS/dupora" || true
+          echo "Runner architecture: $(uname -m)"
+
+      - name: Real macOS runtime smoke test (native engine load + duplicate scan)
+        # Flutter Driver hard-refuses --release on desktop (same
+        # restriction documented for Linux in BUILD.md); --profile is the
+        # closest AOT-compiled, optimized alternative that still allows
+        # driver instrumentation. macOS GitHub Actions runners have a real
+        # GUI session, so no headless-display workaround (unlike Linux's
+        # xvfb-run) is needed here.
+        run: >
+          flutter drive
+          --driver=test_driver/integration_test.dart
+          --target=integration_test/macos_native_engine_test.dart
+          -d macos --profile
+
+      - name: Package portable macOS archive
+        run: |
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent \
+            "build/macos/Build/Products/Release/dupora.app" \
+            "dist/Dupora-macOS-v${VERSION}.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dupora-macos-release
+          path: dist/Dupora-macOS-v${{ needs.prepare.outputs.version }}.zip
+          if-no-files-found: error
 
   # ---------------------------------------------------------------------
   # Linux: build the release bundle, verify the native engine is actually
@@ -442,6 +483,10 @@ jobs:
         with:
           name: dupora-linux-release
           path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: dupora-macos-release
+          path: dist
 
       - name: Generate SHA-256 checksums
         working-directory: dist
@@ -471,11 +516,14 @@ jobs:
             native-engine load, real BLAKE3 hashing, real duplicate
             detection against a known dataset - see BUILD.md). Portable
             archive attached below.
-          - **macOS** - built on GitHub-hosted runners as a compile health
-            check only; **not attached to this release**. It compiles, but
-            the native BLAKE3 engine library isn't bundled into the packaged
-            \`.app\` yet (the same gap Linux had until this release) -
-            tracked as a known limitation, see BUILD.md.
+          - **macOS** - release \`.app\` built, the native BLAKE3 engine
+            library confirmed embedded inside it, and the actual compiled
+            app runtime-tested by this pipeline (real native-engine load,
+            real BLAKE3 hashing, real duplicate detection against a known
+            dataset - see BUILD.md). Not code-signed or notarized (no
+            Apple Developer certificate in this pipeline) - macOS
+            Gatekeeper may warn on first launch. Portable zip attached
+            below.
 
           ### Installation
 
@@ -488,6 +536,10 @@ jobs:
           - **Linux (x86_64):** download
             \`Dupora-Linux-x64-v${VERSION}.tar.gz\`, extract it, and run
             \`bundle/dupora\` directly - no installation needed.
+          - **macOS:** download \`Dupora-macOS-v${VERSION}.zip\`, extract
+            it, and move \`dupora.app\` to Applications (or run it in
+            place). Since it isn't notarized, right-click → Open on first
+            launch to bypass Gatekeeper's unidentified-developer warning.
 
           ### Verification
 
