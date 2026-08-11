@@ -387,11 +387,19 @@ jobs:
           echo "Runner architecture: $(uname -m) (GitHub-hosted ubuntu-latest is x86_64 only - no cross-arch artifact is produced or claimed)"
 
       - name: Real Linux runtime smoke test (native engine load + duplicate scan)
+        # Flutter Driver hard-refuses --release on desktop ("Flutter Driver
+        # (non-web) does not support running in release mode... Use
+        # --profile mode"); this is a Flutter tooling restriction, not a
+        # choice made here. --profile is AOT-compiled and optimized like
+        # release (linux/CMakeLists.txt's AOT_LIBRARY install rule applies
+        # to Profile the same as Release, only Debug is excluded), and
+        # test_api's expect() assertions used in the test run regardless
+        # of profile mode disabling Dart's own assert() statements.
         run: >
           xvfb-run -a flutter drive
           --driver=test_driver/integration_test.dart
           --target=integration_test/linux_native_engine_test.dart
-          -d linux --release
+          -d linux --profile
 
       - name: Package portable Linux archive
         run: |

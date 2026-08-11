@@ -265,9 +265,9 @@ flutter build linux --release
 Needs the GTK3 development headers Flutter's Linux desktop embedder
 requires (`libgtk-3-dev` and friends) on the build machine. Not built or
 run on local hardware in any of this project's sessions - no Linux
-machine has ever been available here - but **fully built, bundled, and
-runtime-verified for real on a GitHub-hosted `ubuntu-latest` (x86_64)
-runner**, via `.github/workflows/release.yml`'s `build-linux` job:
+machine has ever been available here - but built and bundled for real on
+a GitHub-hosted `ubuntu-latest` (x86_64) runner, via
+`.github/workflows/release.yml`'s `build-linux` job:
 
 - **Native engine bundling**: `rust/target/release/libdupora_engine.so`
   (built via plain `cargo build --release`, no cross-compilation needed
@@ -288,15 +288,18 @@ runner**, via `.github/workflows/release.yml`'s `build-linux` job:
   path than a pure runtime `dlopen` call from inside the Dart VM. Windows,
   macOS, and Android loading are unchanged.
 - **Runtime verification**: `integration_test/linux_native_engine_test.dart`
-  drives the actual compiled release bundle's executable (`xvfb-run -a
-  flutter test integration_test/linux_native_engine_test.dart -d linux
-  --release`, since GitHub's runner has no display) - it calls the native
-  engine directly first (proving `DynamicLibrary.open` succeeds with no
-  fallback needed), then runs a real scan against two genuinely identical
-  files and one same-size-but-different-content file, and asserts the
-  duplicate pair is correctly found while the different-content file is
-  correctly excluded - only possible if the real BLAKE3 engine actually
-  executed. See TESTING.md for the full result.
+  drives the actual compiled bundle's executable via `flutter drive`
+  (`xvfb-run -a flutter drive --driver=test_driver/integration_test.dart
+  --target=integration_test/linux_native_engine_test.dart -d linux
+  --profile` - `--profile` because Flutter Driver hard-refuses `--release`
+  entirely on desktop platforms, and GitHub's runner has no display, hence
+  `xvfb-run`) - it calls the native engine directly first (proving
+  `DynamicLibrary.open` succeeds with no fallback needed), then runs a
+  real scan against two genuinely identical files and one same-size-but-
+  different-content file, and asserts the duplicate pair is correctly
+  found while the different-content file is correctly excluded - only
+  possible if the real BLAKE3 engine actually executed. See TESTING.md for
+  the full result and exact GitHub Actions run ID.
 - **Architecture**: x86_64 only - GitHub's `ubuntu-latest` runner is
   x86_64, and that's the only architecture built, verified, or claimed. No
   ARM64 Linux build exists.

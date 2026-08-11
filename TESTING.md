@@ -8,8 +8,8 @@ flutter test                                              61 / 61 passing   (tes
 flutter test integration_test/app_test.dart -d windows      2 / 2 passing   (real compiled exe)
 flutter test integration_test/dataset_test.dart -d windows  1 / 1 passing   (real compiled exe)
 flutter test integration_test/stress_test.dart -d windows   1 / 1 passing   (real compiled exe)
-flutter test integration_test/linux_native_engine_test.dart
-  -d linux --release (GitHub Actions ubuntu-latest)          1 / 1 passing   (real compiled bundle)
+flutter drive --target=integration_test/linux_native_engine_test.dart
+  -d linux --profile (GitHub Actions ubuntu-latest)     see TESTING.md    (real compiled bundle)
 flutter analyze                                              0 issues
 cargo clippy                                                   0 warnings (-D warnings)
 dart format                                                    clean
@@ -35,8 +35,11 @@ flutter test integration_test/dataset_test.dart -d windows
 flutter test integration_test/stress_test.dart -d windows
 
 # Requires a Linux build environment (GTK3 dev headers) plus a display -
-# xvfb-run provides a virtual one on a headless CI runner; see BUILD.md:
-xvfb-run -a flutter test integration_test/linux_native_engine_test.dart -d linux --release
+# xvfb-run provides a virtual one on a headless CI runner. --profile, not
+# --release: Flutter Driver refuses to run in release mode on desktop at
+# all. See BUILD.md.
+xvfb-run -a flutter drive --driver=test_driver/integration_test.dart \
+  --target=integration_test/linux_native_engine_test.dart -d linux --profile
 ```
 
 ## Rust (`rust/`)
