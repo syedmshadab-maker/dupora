@@ -265,9 +265,13 @@ flutter build linux --release
 Needs the GTK3 development headers Flutter's Linux desktop embedder
 requires (`libgtk-3-dev` and friends) on the build machine. Not built or
 run on local hardware in any of this project's sessions - no Linux
-machine has ever been available here - but built and bundled for real on
-a GitHub-hosted `ubuntu-latest` (x86_64) runner, via
-`.github/workflows/release.yml`'s `build-linux` job:
+machine has ever been available here - but **fully built, bundled, and
+runtime-verified for real** on a GitHub-hosted `ubuntu-latest` (x86_64)
+runner, via `.github/workflows/release.yml`'s `build-linux` job
+(GitHub Actions run 31461334167, 2026-08-11 - the third attempt; the
+first two runs caught and fixed real bugs in the smoke test itself, not
+the underlying fix - see the git history on this section's commits for
+the full detail of each):
 
 - **Native engine bundling**: `rust/target/release/libdupora_engine.so`
   (built via plain `cargo build --release`, no cross-compilation needed
@@ -298,8 +302,13 @@ a GitHub-hosted `ubuntu-latest` (x86_64) runner, via
   real scan against two genuinely identical files and one same-size-but-
   different-content file, and asserts the duplicate pair is correctly
   found while the different-content file is correctly excluded - only
-  possible if the real BLAKE3 engine actually executed. See TESTING.md for
-  the full result and exact GitHub Actions run ID.
+  possible if the real BLAKE3 engine actually executed. **Actually passed**
+  on run 31461334167: `Dupora native engine loaded successfully. Version:
+  0.1.0` followed by `Linux native-engine runtime verification passed:
+  engine loaded, BLAKE3 hashing executed, duplicate pair correctly
+  identified, same-size/different-content pair correctly excluded` and
+  `All tests passed!` in the actual CI log. See TESTING.md for the full
+  detail.
 - **Architecture**: x86_64 only - GitHub's `ubuntu-latest` runner is
   x86_64, and that's the only architecture built, verified, or claimed. No
   ARM64 Linux build exists.

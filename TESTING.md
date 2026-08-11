@@ -9,7 +9,7 @@ flutter test integration_test/app_test.dart -d windows      2 / 2 passing   (rea
 flutter test integration_test/dataset_test.dart -d windows  1 / 1 passing   (real compiled exe)
 flutter test integration_test/stress_test.dart -d windows   1 / 1 passing   (real compiled exe)
 flutter drive --target=integration_test/linux_native_engine_test.dart
-  -d linux --profile (GitHub Actions ubuntu-latest)     see TESTING.md    (real compiled bundle)
+  -d linux --profile (GitHub Actions ubuntu-latest)          1 / 1 passing   (real compiled bundle)
 flutter analyze                                              0 issues
 cargo clippy                                                   0 warnings (-D warnings)
 dart format                                                    clean
@@ -257,9 +257,38 @@ PERFORMANCE.md for the actual numbers this produced.
 Written specifically to verify the fix for a real bug: the Linux release
 bundle never included `libdupora_engine.so`, so the packaged app would
 have failed the first time it tried to hash anything (see BUILD.md's
-Linux section for the CMake/FFI-loader fix). Run against the actual
-compiled Linux bundle on GitHub Actions (`ubuntu-latest`, under
-`xvfb-run` since the runner has no display):
+Linux section for the CMake/FFI-loader fix). Run via `flutter drive`
+(`flutter test` doesn't support `--release`/`--profile` for this
+invocation; `flutter drive` does, but hard-refuses `--release` on desktop
+entirely, hence `--profile`) against the actual compiled Linux bundle on
+GitHub Actions (`ubuntu-latest`, under `xvfb-run` since the runner has no
+display).
+
+**Actually passed on GitHub Actions run 31461334167** (2026-08-11), after
+two earlier real failures on the same underlying fix that turned out to
+be CI/test-tooling issues, not the fix itself - each diagnosed and fixed
+in its own commit rather than blindly retried:
+- Run 31439806896: `flutter test ... --release` doesn't support
+  `--release` at all for this Flutter version → switched to `flutter
+  drive` with a driver shim.
+- Run 31440776286: `flutter drive --release` is unconditionally refused
+  on desktop by Flutter Driver itself → switched to `--profile`.
+- Run 31460545295: **the native engine load already succeeded here**
+  (`Dupora native engine loaded successfully. Version: 0.1.0` in the real
+  log) - the fix was already working. The test then failed its own
+  `expect(find.byType(ScanScreen), findsOneWidget)` immediately after a
+  single `tester.pump()`, because with only 3 tiny files the scan can
+  finish faster than one pump observes on a loaded CI runner, going
+  straight to the results screen. Removed that assertion in favor of
+  `pumpUntil` waiting for the actual results screen - the thing that
+  matters, not an intermediate frame.
+- Run 31461334167: clean pass. Real log:
+  `Dupora native engine loaded successfully. Version: 0.1.0`, then
+  `Linux native-engine runtime verification passed: engine loaded, BLAKE3
+  hashing executed, duplicate pair correctly identified, same-size/
+  different-content pair correctly excluded`, then `All tests passed!`.
+
+The test itself:
 
 1. Calls `NativeHasher().engineVersion()` directly, before touching any
    UI - if the bundled `.so` weren't found, `DuporaNativeBindings
