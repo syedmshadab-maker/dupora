@@ -14,7 +14,6 @@ import 'dart:io';
 import 'package:dupora/core/native/hash_engine.dart';
 import 'package:dupora/main.dart';
 import 'package:dupora/ui/screens/results_screen.dart';
-import 'package:dupora/ui/screens/scan_screen.dart';
 import 'package:dupora/ui/state/app_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -97,9 +96,18 @@ void main() {
     // --- Step 4: real scan, real Stage 0-3 pipeline, real BLAKE3 via FFI. ---
     await tester.tap(find.textContaining('Start Scan'));
     await tester.pump();
-    expect(find.byType(ScanScreen), findsOneWidget);
-
-    await pumpUntil(tester, () => controller.screen == AppScreen.results);
+    // Don't hard-assert ScanScreen specifically: with only 3 tiny files,
+    // the scan can complete faster than a single pump() on a loaded CI
+    // runner can observe the mid-scan frame, going straight to results.
+    // What actually matters (and is asserted below) is that scanning
+    // started and the app reached a real, correct result - not that this
+    // test happened to catch the transitional screen.
+    // 60s budget - a loaded CI runner may be slower than a dev machine.
+    await pumpUntil(
+      tester,
+      () => controller.screen == AppScreen.results,
+      maxSteps: 300,
+    );
     expect(find.byType(ResultsScreen), findsOneWidget);
 
     // --- Step 5: verify against known ground truth. ---
