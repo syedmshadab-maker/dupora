@@ -2,6 +2,71 @@
 
 All notable changes to this project are documented here.
 
+## [1.1.0] - 2026-08-11 - Linux and macOS release-ready
+
+Linux and macOS join Windows and Android as fully release-gating,
+runtime-verified platforms - `.github/workflows/release.yml` now builds,
+verifies, and attaches real artifacts for all four on every tagged
+release, with no `continue-on-error` anywhere in that set.
+
+### Fixed
+
+- **macOS wouldn't even compile**: `macos/Runner/TrashChannel.swift`
+  (the Trash-deletion Swift bridge) existed in the repo but was never
+  registered in `Runner.xcodeproj`'s build target, so Xcode silently
+  never built it - `MainFlutterWindow.swift`'s reference to it failed
+  with `cannot find 'TrashChannel' in scope`. Fixed by registering it in
+  the Xcode project (PBXBuildFile/PBXFileReference/PBXGroup/
+  PBXSourcesBuildPhase), the smallest correct change mirroring how every
+  other Runner source file is already registered.
+- **Linux release bundle never included the native BLAKE3 engine**:
+  `libdupora_engine.so` was built but nothing copied it into
+  `build/linux/x64/release/bundle/`, so the packaged app would have
+  failed the first time it tried to hash anything.
+  `linux/CMakeLists.txt` now installs it into `bundle/lib/`, mirroring
+  the pattern `windows/CMakeLists.txt` already used for
+  `dupora_engine.dll`; `dupora_native_bindings.dart`'s Linux loader now
+  also resolves it via an explicit path relative to the running
+  executable, rather than relying solely on bare `dlopen` + RPATH
+  resolution.
+- **macOS had the identical native-engine-bundling gap**, once it could
+  compile: `libdupora_engine.dylib` (a genuine universal arm64+x86_64
+  binary) wasn't embedded in the packaged `.app`.
+  `macos/Runner.xcodeproj`'s previously-empty "Bundle Framework"
+  copy-files build phase now embeds it into `Contents/Frameworks/`; the
+  FFI loader gained the same explicit, executable-relative resolution
+  strategy already used for Linux.
+
+### Added
+
+- `integration_test/linux_native_engine_test.dart` and
+  `integration_test/macos_native_engine_test.dart`: drive the real
+  compiled release bundle/app on GitHub-hosted `ubuntu-latest`/
+  `macos-latest` runners (`flutter drive --profile` - Flutter Driver
+  refuses `--release` entirely on desktop) - call the native engine
+  directly first (proving no `DynamicLibrary.open` failure), then run a
+  real scan against a controlled dataset and assert correct duplicate
+  detection. No mocks. Both genuinely passed in CI (Linux: run
+  31461334167, after diagnosing and fixing three real CI/test-tooling
+  issues along the way, not blindly retried; macOS: run 31462917213, on
+  the first attempt, applying what Linux's debugging had already
+  surfaced).
+- `.github/workflows/release.yml`: `build-linux` and `build-macos` now
+  verify the native library is actually bundled, run the new integration
+  tests, and package `Dupora-Linux-x64-vX.Y.Z.tar.gz` /
+  `Dupora-macOS-vX.Y.Z.zip` for `release-publish` to attach. Neither has
+  `continue-on-error` anymore, making all four platforms release-gating.
+
+### Known limitations (honest, not silently claimed as fixed)
+
+- macOS artifacts are not code-signed or notarized (no Apple Developer
+  certificate available in this pipeline) - Gatekeeper will warn on
+  first launch.
+- Trash deletion (`TrashChannel.swift`) and volume detection on both
+  Linux and macOS remain unexercised by these tests (which cover
+  scan/hash/detect, not delete or storage enumeration) and by any real
+  hardware in this project's build sessions.
+
 ## [Unreleased] - 2026-08-11 - Windows distributable installer
 
 - Added `installer/dupora.wxs` (MSI) and `installer/bundle.wxs` (Burn
