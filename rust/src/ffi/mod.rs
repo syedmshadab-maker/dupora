@@ -180,6 +180,23 @@ mod tests {
     }
 
     #[test]
+    fn a_panic_inside_the_ffi_catch_unwind_pattern_never_escapes() {
+        // Exercises the exact `catch_unwind(AssertUnwindSafe(...))` +
+        // `.unwrap_or(StatusCode::Unexpected as i32)` pattern every
+        // `extern "C"` export above uses, with a deliberate panic inside
+        // it - proving a Rust panic is turned into a safe status code
+        // rather than unwinding across the FFI boundary (which is
+        // undefined behavior and would take the whole Dart process down
+        // with it, not just fail one hash).
+        let result = catch_unwind(AssertUnwindSafe(|| -> i32 {
+            panic!("deliberate panic - proving the FFI boundary is panic-safe");
+        }));
+        assert!(result.is_err());
+        let status = result.unwrap_or(StatusCode::Unexpected as i32);
+        assert_eq!(status, StatusCode::Unexpected as i32);
+    }
+
+    #[test]
     fn ffi_invalid_utf8_path_is_rejected_not_ub() {
         let bad = [0xFFu8, 0xFEu8, 0xFDu8];
         let mut out = [0u8; DIGEST_LEN];

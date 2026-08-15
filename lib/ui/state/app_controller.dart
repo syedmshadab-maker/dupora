@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
+import 'package:logging/logging.dart';
 
 import '../../features/cache/hash_cache_database.dart';
 import '../../features/cache/hash_cache_repository.dart';
@@ -15,6 +18,8 @@ import '../../features/storage/data/storage_detector.dart';
 import '../../features/storage/domain/storage_volume.dart';
 
 enum AppScreen { home, scanning, results }
+
+final _log = Logger('AppController');
 
 /// Top-level application state. Deliberately a single plain
 /// `ChangeNotifier` rather than many small providers: this app has one
@@ -50,6 +55,22 @@ class AppController extends ChangeNotifier {
   HashCacheDatabase? _db;
   final _settingsRepo = SettingsRepository();
 
+  // Set once in [dispose]. Every callback that can resume after an `await`
+  // (i.e. after the widget tree that owns this controller may already have
+  // been torn down) must check this before calling [notifyListeners]
+  // directly - a `ChangeNotifier` throws if notified after disposal, and
+  // that throw would otherwise surface as an app crash on whatever async
+  // operation happened to be in flight when the app closed (most commonly
+  // a large delete batch or an in-progress scan).
+  bool _disposed = false;
+  StreamSubscription<ScanProgress>? _progressSubscription;
+
+  bool isDeleting = false;
+
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
+
   Future<void> init() async {
     settings = await _settingsRepo.load();
     protectedLocations = ProtectedLocations(
@@ -66,24 +87,25 @@ class AppController extends ChangeNotifier {
       volumes = await StorageDetector.forPlatform().listVolumes();
     } catch (e) {
       lastError = 'Could not enumerate storage volumes: $e';
+      _log.warning('Volume enumeration failed: $e');
     }
-    notifyListeners();
+    _notify();
   }
 
   void clearError() {
     lastError = null;
-    notifyListeners();
+    _notify();
   }
 
   void toggleRootSelected(String path) {
     if (!selectedRoots.remove(path)) selectedRoots.add(path);
-    notifyListeners();
+    _notify();
   }
 
   void addCustomFolder(String path) {
     if (!customFolders.contains(path)) customFolders.add(path);
     selectedRoots.add(path);
-    notifyListeners();
+    _notify();
   }
 
   Future<void> updateSettings(DuporaSettings newSettings) async {
@@ -95,7 +117,7 @@ class AppController extends ChangeNotifier {
       protectedLocations: protectedLocations,
     );
     await _settingsRepo.save(settings);
-    notifyListeners();
+    _notify();
   }
 
   Future<void> startScan() async {
@@ -111,20 +133,27 @@ class AppController extends ChangeNotifier {
     lastError = null;
     _keepOverrides.clear();
     _selectedForDeletion.clear();
-    notifyListeners();
+    _notify();
 
     final engine = ScanEngine(cache: cacheRepo, settings: settings);
     scanEngine = engine;
-    engine.progressStream.listen((p) {
+    unawaited(_progressSubscription?.cancel());
+    _progressSubscription = engine.progressStream.listen((p) {
       lastProgress = p;
-      notifyListeners();
+      _notify();
     });
 
     try {
       final result = await engine.start(selectedRoots.toList());
       lastResult = result;
       screen = AppScreen.results;
-      _applyDefaultSelection();
+      // Deliberately does NOT auto-select anything for deletion here.
+      // `keepFileFor` still computes a "keep" candidate per group on
+      // demand for the UI's star indicator, but nothing is marked for
+      // deletion until the user explicitly triggers Smart Select (or
+      // taps individual files) - required flow is Scan -> review ->
+      // explicit Smart Select -> review -> explicit delete confirmation,
+      // never Scan -> [already selected for deletion].
     } catch (e) {
       // Without this, any exception here (a database error, a worker
       // isolate failing to spawn, disk I/O failure while writing the
@@ -132,20 +161,21 @@ class AppController extends ChangeNotifier {
       // and leave the UI stuck on the Scanning screen forever - the user
       // would have no way to recover except restarting the app.
       lastError = 'Scan failed: $e';
+      _log.warning('Scan failed: $e');
       screen = AppScreen.home;
     } finally {
-      notifyListeners();
+      _notify();
     }
   }
 
   void pauseScan() {
     scanEngine?.pause();
-    notifyListeners();
+    _notify();
   }
 
   void resumeScan() {
     scanEngine?.resume();
-    notifyListeners();
+    _notify();
   }
 
   Future<void> cancelScan() async {
@@ -157,7 +187,7 @@ class AppController extends ChangeNotifier {
     lastResult = null;
     lastProgress = null;
     scanEngine = null;
-    notifyListeners();
+    _notify();
   }
 
   // --- Selection ---
@@ -180,7 +210,7 @@ class AppController extends ChangeNotifier {
     for (final f in group.files) {
       if (f != file) _selectedForDeletion.add(f.path);
     }
-    notifyListeners();
+    _notify();
   }
 
   void toggleFileSelected(ScannedFile file, ScannedFile keep) {
@@ -188,7 +218,7 @@ class AppController extends ChangeNotifier {
     if (!_selectedForDeletion.remove(file.path)) {
       _selectedForDeletion.add(file.path);
     }
-    notifyListeners();
+    _notify();
   }
 
   void applyStrategyToAllGroups(SmartSelectionStrategy strategy) {
@@ -206,11 +236,8 @@ class AppController extends ChangeNotifier {
         }
       }
     }
-    notifyListeners();
+    _notify();
   }
-
-  void _applyDefaultSelection() =>
-      applyStrategyToAllGroups(settings.defaultSelectionStrategy);
 
   int get selectedCount => _selectedForDeletion.length;
 
@@ -225,35 +252,57 @@ class AppController extends ChangeNotifier {
     return total;
   }
 
+  /// Deletes every file currently marked for deletion, one at a time
+  /// (never concurrently - see [SafeDeleteCoordinator], which is itself
+  /// re-entrancy-safe per path, but a bounded/sequential batch here also
+  /// keeps this app from ever opening hundreds of simultaneous native
+  /// delete operations against the shell). A single file's failure never
+  /// aborts the batch: every file gets its own [DeleteResult] and the loop
+  /// always continues to the next one.
   Future<List<DeleteResult>> deleteSelected() async {
-    final groups = lastResult?.groups ?? const [];
-    final toDelete = <ScannedFile>[];
-    final keepByPath = <String, ScannedFile>{};
-    for (final group in groups) {
-      final keep = keepFileFor(group);
-      for (final f in group.files) {
-        keepByPath[f.path] = keep;
-        if (_selectedForDeletion.contains(f.path)) toDelete.add(f);
-      }
-    }
+    if (isDeleting) return const []; // already running; refuse re-entry
+    isDeleting = true;
+    _notify();
 
     final results = <DeleteResult>[];
-    for (final file in toDelete) {
-      final result = await deleteCoordinator.delete(
-        file,
-        mustNotEqual: keepByPath[file.path],
-      );
-      results.add(result);
-      if (result.succeeded) _selectedForDeletion.remove(file.path);
+    try {
+      final groups = lastResult?.groups ?? const [];
+      final toDelete = <ScannedFile>[];
+      final keepByPath = <String, ScannedFile>{};
+      for (final group in groups) {
+        final keep = keepFileFor(group);
+        for (final f in group.files) {
+          keepByPath[f.path] = keep;
+          if (_selectedForDeletion.contains(f.path)) toDelete.add(f);
+        }
+      }
+
+      for (final file in toDelete) {
+        final result = await deleteCoordinator.delete(
+          file,
+          mustNotEqual: keepByPath[file.path],
+        );
+        results.add(result);
+        if (result.succeeded) _selectedForDeletion.remove(file.path);
+      }
+      return results;
+    } finally {
+      isDeleting = false;
+      _notify();
     }
-    notifyListeners();
-    return results;
   }
 
   @override
   void dispose() {
+    _disposed = true;
+    unawaited(_progressSubscription?.cancel());
+    // A scan still in flight has no listener left to report to once this
+    // controller is gone; cancel its worker isolates/native hashing rather
+    // than letting them keep running in the background until the process
+    // exits on its own.
+    unawaited(scanEngine?.cancel());
     scanEngine?.dispose();
-    _db?.close();
+    unawaited(_db?.close());
     super.dispose();
   }
 }

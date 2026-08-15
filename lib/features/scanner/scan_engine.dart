@@ -87,10 +87,15 @@ class ScanEngine {
           ? settings.maxConcurrency
           : hasher.recommendedWorkerCount(),
     );
-    await pool.start();
-    _startProgressTicker();
 
     try {
+      // `pool.start()` (isolate spawning) must be inside this try: if it
+      // throws partway through (e.g. the OS refuses to spawn another
+      // isolate), the `finally` below must still run to shut down whatever
+      // isolates *did* spawn and free `cancel`'s native memory - otherwise
+      // a worker-spawn failure leaks both.
+      await pool.start();
+      _startProgressTicker();
       // --- Stage 0: discovery ---
       _progress = _progress.copyWith(
         phase: ScanPhase.discovering,

@@ -64,6 +64,16 @@ class ProtectedLocations {
     if (localAppData != null) {
       roots.add(p.join(localAppData, 'Dupora'));
     }
+    // Also protect the directory the running app was launched from, so a
+    // portable (non-installed) build can never have its own exe/DLLs
+    // scanned or deleted no matter where the user unzipped it - the
+    // LOCALAPPDATA entry above only covers an installed copy.
+    try {
+      roots.add(p.dirname(Platform.resolvedExecutable));
+    } catch (_) {
+      // Defensive only; Platform.resolvedExecutable is not expected to
+      // throw, and protection still works without this entry.
+    }
     return roots.map(_normalize).toSet();
   }
 }

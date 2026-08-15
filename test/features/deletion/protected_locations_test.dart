@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:dupora/features/deletion/protected_locations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 
 void main() {
   group('ProtectedLocations', () {
@@ -33,6 +34,18 @@ void main() {
       expect(locations.isProtected(r'C:\Temp\a.txt'), isTrue);
       locations.remove(r'C:\Temp');
       expect(locations.isProtected(r'C:\Temp\a.txt'), isFalse);
+    });
+
+    test("protects the running app's own directory, e.g. a portable build "
+        'unzipped anywhere the user chose (not just an installed copy under '
+        'Program Files/LOCALAPPDATA)', () {
+      final locations = ProtectedLocations();
+      final exeDir = p.dirname(Platform.resolvedExecutable);
+      expect(locations.isProtected(p.join(exeDir, 'dupora.exe')), isTrue);
+      expect(
+        locations.isProtected(p.join(exeDir, 'dupora_engine.dll')),
+        isTrue,
+      );
     });
 
     test('is not so aggressive that ordinary user folders are protected', () {

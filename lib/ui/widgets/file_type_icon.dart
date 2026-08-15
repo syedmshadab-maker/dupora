@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../../features/preview/thumbnail_service.dart';
@@ -32,7 +34,7 @@ Color colorForCategory(PreviewCategory category, ColorScheme scheme) {
 /// `ListView.builder`/`GridView.builder` virtualization scrolls it into
 /// view), and results are cached by [ThumbnailService] so re-scrolling
 /// past it is free.
-class FileThumbnail extends StatelessWidget {
+class FileThumbnail extends StatefulWidget {
   const FileThumbnail({
     super.key,
     required this.path,
@@ -49,16 +51,60 @@ class FileThumbnail extends StatelessWidget {
   final double size;
 
   @override
+  State<FileThumbnail> createState() => _FileThumbnailState();
+}
+
+class _FileThumbnailState extends State<FileThumbnail> {
+  final _cancelToken = ThumbnailCancelToken();
+  Future<Uint8List?>? _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _startFetch();
+  }
+
+  @override
+  void didUpdateWidget(covariant FileThumbnail oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // `ListView.builder`/`GridView.builder` reuse State objects across
+    // different items as the user scrolls; without this, a recycled tile
+    // could keep showing (or awaiting) the *previous* file's thumbnail.
+    if (oldWidget.path != widget.path ||
+        oldWidget.modifiedAt != widget.modifiedAt) {
+      _startFetch();
+    }
+  }
+
+  void _startFetch() {
+    if (categoryForExtension(widget.extension) != PreviewCategory.image) {
+      _future = null;
+      return;
+    }
+    _future = widget.thumbnailService.getThumbnail(
+      widget.path,
+      widget.modifiedAt,
+      cancelToken: _cancelToken,
+    );
+  }
+
+  @override
+  void dispose() {
+    _cancelToken.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final category = categoryForExtension(extension);
+    final category = categoryForExtension(widget.extension);
     final scheme = Theme.of(context).colorScheme;
 
     if (category != PreviewCategory.image) {
       return _iconBox(category, scheme);
     }
 
-    return FutureBuilder(
-      future: thumbnailService.getThumbnail(path, modifiedAt),
+    return FutureBuilder<Uint8List?>(
+      future: _future,
       builder: (context, snapshot) {
         final bytes = snapshot.data;
         if (bytes == null) return _iconBox(category, scheme);
@@ -66,8 +112,8 @@ class FileThumbnail extends StatelessWidget {
           borderRadius: BorderRadius.circular(6),
           child: Image.memory(
             bytes,
-            width: size,
-            height: size,
+            width: widget.size,
+            height: widget.size,
             fit: BoxFit.cover,
             gaplessPlayback: true,
             errorBuilder: (_, _, _) => _iconBox(category, scheme),
@@ -79,15 +125,15 @@ class FileThumbnail extends StatelessWidget {
 
   Widget _iconBox(PreviewCategory category, ColorScheme scheme) {
     return Container(
-      width: size,
-      height: size,
+      width: widget.size,
+      height: widget.size,
       decoration: BoxDecoration(
         color: colorForCategory(category, scheme).withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Icon(
         iconForCategory(category),
-        size: size * 0.55,
+        size: widget.size * 0.55,
         color: colorForCategory(category, scheme),
       ),
     );

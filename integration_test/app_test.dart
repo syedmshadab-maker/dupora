@@ -44,118 +44,138 @@ class TimeoutException implements Exception {
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('production build: scan, detect duplicates, delete to Recycle Bin', (
-    tester,
-  ) async {
-    final testDir = await Directory.systemTemp.createTemp('dupora_itest_');
-    addTearDown(() async {
-      if (await testDir.exists()) {
-        await testDir.delete(recursive: true);
+  testWidgets(
+    'production build: scan, detect duplicates, delete to Recycle Bin',
+    (tester) async {
+      final testDir = await Directory.systemTemp.createTemp('dupora_itest_');
+      addTearDown(() async {
+        if (await testDir.exists()) {
+          await testDir.delete(recursive: true);
+        }
+      });
+
+      final fileA = File('${testDir.path}\\duplicate_a.txt');
+      final fileB = File('${testDir.path}\\duplicate_b.txt');
+      final fileUnique = File('${testDir.path}\\unique.txt');
+      await fileA.writeAsString('Dupora integration test duplicate content.');
+      await fileB.writeAsString('Dupora integration test duplicate content.');
+      await fileUnique.writeAsString('This file is intentionally different.');
+
+      // --- Boot the real app ---
+      await tester.pumpWidget(const DuporaBootstrap());
+      await pumpUntil(
+        tester,
+        () => find.byType(Scaffold).evaluate().isNotEmpty,
+      );
+      // Let async init (settings, cache DB, volume enumeration) finish.
+      await tester.pump(const Duration(seconds: 2));
+
+      final context = tester.element(find.byType(Scaffold).first);
+      final controller = context.read<AppController>();
+
+      // --- Folder selection ---
+      // The native OS folder-picker dialog lives outside the Flutter engine
+      // and can't be driven by integration_test; we call the same method the
+      // "Add Folder" button calls, exercising identical app logic.
+      controller.addCustomFolder(testDir.path);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('Start Scan'),
+        findsOneWidget,
+        reason: 'Start Scan button should be enabled once a folder is selected',
+      );
+
+      // --- Scanning: real Stage 0-3 pipeline, real BLAKE3 via dart:ffi ---
+      await tester.tap(find.textContaining('Start Scan'));
+      await tester.pump();
+      expect(find.byType(ScanScreen), findsOneWidget);
+
+      await pumpUntil(tester, () => controller.screen == AppScreen.results);
+      expect(find.byType(ResultsScreen), findsOneWidget);
+
+      // --- Verify duplicate detection against known ground truth ---
+      final result = controller.lastResult;
+      expect(result, isNotNull);
+      expect(
+        result!.groups.length,
+        1,
+        reason: 'exactly one duplicate group (duplicate_a/duplicate_b)',
+      );
+      final group = result.groups.single;
+      expect(group.files.length, 2);
+      expect(group.fileSize, greaterThan(0));
+      final groupPaths = group.files.map((f) => f.path).toSet();
+      expect(groupPaths, {fileA.path, fileB.path});
+      // unique.txt must never appear in any duplicate group.
+      for (final g in result.groups) {
+        expect(g.files.any((f) => f.path == fileUnique.path), isFalse);
       }
-    });
+      expect(result.errors, isEmpty);
 
-    final fileA = File('${testDir.path}\\duplicate_a.txt');
-    final fileB = File('${testDir.path}\\duplicate_b.txt');
-    final fileUnique = File('${testDir.path}\\unique.txt');
-    await fileA.writeAsString('Dupora integration test duplicate content.');
-    await fileB.writeAsString('Dupora integration test duplicate content.');
-    await fileUnique.writeAsString('This file is intentionally different.');
+      // --- Nothing is preselected for deletion right after the scan - Smart
+      // Select must be an explicit user action. ---
+      expect(
+        controller.selectedCount,
+        0,
+        reason: 'a completed scan must never preselect anything for deletion',
+      );
 
-    // --- Boot the real app ---
-    await tester.pumpWidget(const DuporaBootstrap());
-    await pumpUntil(tester, () => find.byType(Scaffold).evaluate().isNotEmpty);
-    // Let async init (settings, cache DB, volume enumeration) finish.
-    await tester.pump(const Duration(seconds: 2));
+      // --- Explicitly invoke Smart Select through the real toolbar control
+      // (not the controller API directly), proving the actual UI wiring
+      // requires a deliberate tap before anything is chosen. ---
+      await tester.tap(find.byTooltip('Smart selection'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Keep oldest'));
+      await tester.pumpAndSettle();
 
-    final context = tester.element(find.byType(Scaffold).first);
-    final controller = context.read<AppController>();
+      expect(
+        controller.selectedCount,
+        1,
+        reason:
+            'exactly one of the two duplicates should be selected after '
+            'explicitly invoking Smart Select',
+      );
+      final keep = controller.keepFileFor(group);
+      final toDelete = group.files.firstWhere((f) => f != keep);
+      expect(controller.isSelectedForDeletion(toDelete), isTrue);
+      expect(controller.isSelectedForDeletion(keep), isFalse);
 
-    // --- Folder selection ---
-    // The native OS folder-picker dialog lives outside the Flutter engine
-    // and can't be driven by integration_test; we call the same method the
-    // "Add Folder" button calls, exercising identical app logic.
-    controller.addCustomFolder(testDir.path);
-    await tester.pumpAndSettle();
+      // --- Recycle Bin deletion, through the real confirmation dialog ---
+      await tester.tap(
+        find
+            .byWidgetPredicate((w) => w is FilledButton && w.onPressed != null)
+            .first,
+      );
+      await tester.pumpAndSettle();
 
-    expect(
-      find.textContaining('Start Scan'),
-      findsOneWidget,
-      reason: 'Start Scan button should be enabled once a folder is selected',
-    );
+      expect(
+        find.text('Move to Trash?'),
+        findsOneWidget,
+        reason:
+            'Windows has a real Recycle Bin, so the non-permanent-delete dialog must show',
+      );
+      await tester.tap(find.text('Move to Trash'));
+      await tester.pumpAndSettle();
 
-    // --- Scanning: real Stage 0-3 pipeline, real BLAKE3 via dart:ffi ---
-    await tester.tap(find.textContaining('Start Scan'));
-    await tester.pump();
-    expect(find.byType(ScanScreen), findsOneWidget);
-
-    await pumpUntil(tester, () => controller.screen == AppScreen.results);
-    expect(find.byType(ResultsScreen), findsOneWidget);
-
-    // --- Verify duplicate detection against known ground truth ---
-    final result = controller.lastResult;
-    expect(result, isNotNull);
-    expect(
-      result!.groups.length,
-      1,
-      reason: 'exactly one duplicate group (duplicate_a/duplicate_b)',
-    );
-    final group = result.groups.single;
-    expect(group.files.length, 2);
-    expect(group.fileSize, greaterThan(0));
-    final groupPaths = group.files.map((f) => f.path).toSet();
-    expect(groupPaths, {fileA.path, fileB.path});
-    // unique.txt must never appear in any duplicate group.
-    for (final g in result.groups) {
-      expect(g.files.any((f) => f.path == fileUnique.path), isFalse);
-    }
-    expect(result.errors, isEmpty);
-
-    // --- Duplicate selection (smart selection already applied post-scan) ---
-    expect(
-      controller.selectedCount,
-      1,
-      reason:
-          'exactly one of the two duplicates should be pre-selected for deletion',
-    );
-    final keep = controller.keepFileFor(group);
-    final toDelete = group.files.firstWhere((f) => f != keep);
-    expect(controller.isSelectedForDeletion(toDelete), isTrue);
-    expect(controller.isSelectedForDeletion(keep), isFalse);
-
-    // --- Recycle Bin deletion, through the real confirmation dialog ---
-    await tester.tap(
-      find
-          .byWidgetPredicate((w) => w is FilledButton && w.onPressed != null)
-          .first,
-    );
-    await tester.pumpAndSettle();
-
-    expect(
-      find.text('Move to Trash?'),
-      findsOneWidget,
-      reason:
-          'Windows has a real Recycle Bin, so the non-permanent-delete dialog must show',
-    );
-    await tester.tap(find.text('Move to Trash'));
-    await tester.pumpAndSettle();
-
-    // --- Verify the actual filesystem effect ---
-    expect(
-      await File(toDelete.path).exists(),
-      isFalse,
-      reason: 'deleted duplicate must be gone from its original location',
-    );
-    expect(
-      await File(keep.path).exists(),
-      isTrue,
-      reason: 'the kept copy must survive',
-    );
-    expect(
-      await fileUnique.exists(),
-      isTrue,
-      reason: 'the unrelated unique file must be untouched',
-    );
-  });
+      // --- Verify the actual filesystem effect ---
+      expect(
+        await File(toDelete.path).exists(),
+        isFalse,
+        reason: 'deleted duplicate must be gone from its original location',
+      );
+      expect(
+        await File(keep.path).exists(),
+        isTrue,
+        reason: 'the kept copy must survive',
+      );
+      expect(
+        await fileUnique.exists(),
+        isTrue,
+        reason: 'the unrelated unique file must be untouched',
+      );
+    },
+  );
 
   testWidgets('production build: cancellation stops a scan cleanly', (
     tester,

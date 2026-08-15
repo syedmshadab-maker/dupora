@@ -9,8 +9,10 @@ enum DeleteOutcome {
   permanentlyDeleted,
   skippedProtected,
   skippedAlreadyRequested,
-  notFound,
-  identityMismatch,
+  notFound, // ALREADY_GONE: existed at scan time, gone by delete time.
+  identityMismatch, // CHANGED: size/mtime no longer match the scanned file.
+  locked, // LOCKED: open/in use by another process.
+  permissionDenied, // PERMISSION_DENIED: OS denied access.
   failed,
 }
 
@@ -128,6 +130,16 @@ class SafeDeleteCoordinator {
       );
     } catch (e) {
       _inFlightOrDone.remove(path); // allow a retry after a genuine failure
+      if (e is RecycleBinLockedException) {
+        return DeleteResult(path, DeleteOutcome.locked, error: e.toString());
+      }
+      if (e is RecycleBinPermissionDeniedException) {
+        return DeleteResult(
+          path,
+          DeleteOutcome.permissionDenied,
+          error: e.toString(),
+        );
+      }
       return DeleteResult(path, DeleteOutcome.failed, error: e.toString());
     }
   }

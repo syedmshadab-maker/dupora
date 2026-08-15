@@ -5,8 +5,8 @@
 ## Current status
 
 ```
-cargo test                                                21 / 21 passing   (rust/)
-flutter test                                              52 / 52 passing   (test/)
+cargo test                                                22 / 22 passing   (rust/)
+flutter test                                              73 / 73 passing   (test/)
 flutter test integration_test/app_test.dart -d windows      2 / 2 passing   (real compiled exe)
 flutter test integration_test/dataset_test.dart -d windows  1 / 1 passing   (real compiled exe)
 flutter test integration_test/stress_test.dart -d windows   1 / 1 passing   (real compiled exe)

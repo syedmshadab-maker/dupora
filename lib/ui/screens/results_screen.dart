@@ -81,16 +81,25 @@ class ResultsScreen extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                 child: FilledButton.icon(
-                  onPressed: controller.selectedCount == 0
+                  onPressed:
+                      controller.selectedCount == 0 || controller.isDeleting
                       ? null
                       : () => _confirmAndDelete(context, controller),
-                  icon: Icon(
-                    controller.deleteCoordinator.usesTrash
-                        ? Icons.delete_outline
-                        : Icons.delete_forever,
-                  ),
+                  icon: controller.isDeleting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          controller.deleteCoordinator.usesTrash
+                              ? Icons.delete_outline
+                              : Icons.delete_forever,
+                        ),
                   label: Text(
-                    controller.selectedCount == 0
+                    controller.isDeleting
+                        ? 'Deleting...'
+                        : controller.selectedCount == 0
                         ? 'Select duplicates to remove'
                         : '${controller.deleteCoordinator.usesTrash ? "Move" : "Permanently delete"} '
                               '${controller.selectedCount} files (${formatBytes(controller.selectedBytes)})',
@@ -116,10 +125,15 @@ class ResultsScreen extends StatelessWidget {
         content: Text(
           usesTrash
               ? 'This will move ${controller.selectedCount} files '
-                    '(${formatBytes(controller.selectedBytes)}) to the Recycle Bin / Trash. You can restore them from there.'
+                    '(${formatBytes(controller.selectedBytes)}) to the Recycle Bin. '
+                    'You can restore them from there.\n\n'
+                    'Any file that changed, disappeared, or became inaccessible '
+                    'since the scan will be skipped automatically and left untouched.'
               : 'This platform has no Trash for these files. '
                     '${controller.selectedCount} files (${formatBytes(controller.selectedBytes)}) '
-                    'will be PERMANENTLY deleted and cannot be recovered.',
+                    'will be PERMANENTLY deleted and cannot be recovered.\n\n'
+                    'Any file that changed, disappeared, or became inaccessible '
+                    'since the scan will be skipped automatically and left untouched.',
         ),
         actions: [
           TextButton(

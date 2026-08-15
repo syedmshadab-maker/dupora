@@ -82,8 +82,9 @@ void main() {
       errors: const [],
       finalProgress: const ScanProgress.initial(),
     );
-    // No default-selection pass applied (that normally happens after a real
-    // scan completes via _applyDefaultSelection) - selectedCount starts at 0.
+    // selectedCount starts at 0 - a completed scan never preselects
+    // anything for deletion; see app_controller_test.dart for the
+    // regression test against a real scan.
 
     await tester.pumpWidget(_wrap(controller));
     await tester.pumpAndSettle();

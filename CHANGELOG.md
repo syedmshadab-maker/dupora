@@ -2,6 +2,70 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased] - Windows deletion/runtime safety hardening
+
+A reliability/safety pass over the deletion pipeline, cache startup,
+thumbnail lifecycle, and scan runtime - no new features, no platform or
+version changes.
+
+### Fixed
+
+- `AppController` could call `notifyListeners()` after `dispose()` from an
+  async continuation (e.g. a batch delete still in flight when the widget
+  tree is torn down), which throws in a `ChangeNotifier`. Every async
+  method now routes through a disposed-checking `_notify()` helper, and
+  `dispose()` cancels the live scan-progress subscription and signals the
+  in-flight `ScanEngine` to cancel rather than leaving it running
+  unobserved.
+- **A completed scan no longer preselects anything for deletion.**
+  `startScan()` previously called `_applyDefaultSelection()` immediately
+  after every scan, marking most duplicates for deletion before the user
+  had done anything. The required flow is Scan -> review -> explicit
+  Smart Select (or manual per-file selection) -> review -> explicit delete
+  confirmation; `_applyDefaultSelection()` is removed, and `keepFileFor()`
+  still computes the "keep" candidate on demand for the UI's star
+  indicator without touching the selection set.
+- `HashCacheDatabase.open()` had no error handling at all; a corrupted,
+  schema-mismatched, or locked cache file would throw uncaught during app
+  startup. It now verifies the database with a real query immediately
+  after opening, quarantines an unusable file and rebuilds a fresh cache
+  in its place, and falls back to an in-memory database (app still fully
+  usable, just without cache persistence this session) if even that
+  fails.
+- `ThumbnailService.getThumbnail()` had no cancellation support and
+  decoded images synchronously on the calling isolate. It now accepts an
+  optional `ThumbnailCancelToken` (checked at each await boundary so a
+  scrolled-away tile's in-flight request stops doing further unnecessary
+  work) and offloads decoding to a separate isolate via `Isolate.run` so a
+  large or hostile image can't block the caller.
+- `WindowsDeleter`/`SafeDeleteCoordinator` previously classified every
+  `SHFileOperationW` failure as one generic `failed` outcome. Two new
+  outcomes, `locked` and `permissionDenied`, are now derived from a
+  documented Win32 error-code probe (`ERROR_SHARING_VIOLATION` /
+  `ERROR_LOCK_VIOLATION` / `ERROR_ACCESS_DENIED`) rather than guessing
+  from `SHFileOperationW`'s own legacy `DE_*` return codes.
+- `ScanEngine.start()` allocated its `CancelSignal` and constructed the
+  worker pool before the `try`/`finally` that shuts the pool down and
+  frees that native memory; a worker-isolate spawn failure would leak
+  both. Both are now inside the `try`.
+- `ProtectedLocations` did not protect a portable (non-installed) build's
+  own directory, only an installed copy under `Program Files`/
+  `LOCALAPPDATA`. It now also protects `dirname(Platform.resolvedExecutable)`.
+
+### Added
+
+- Structured logging (`package:logging`, routed to `debugPrint`) for
+  handled-but-notable failures: cache recovery, volume enumeration, scan
+  failures.
+- Real, non-mocked adversarial tests: a locked-file delete via a genuine
+  exclusive Win32 handle, a read-only-file delete, a directory
+  junction/reparse-point escape attempt (default-blocked, opt-in via
+  `followSymlinks`), cache corruption recovery against a real corrupt
+  SQLite file, Unicode/spaced filenames, a 100-file duplicate group, a
+  near-MAX_PATH-length file, and a Rust-panic-across-FFI-boundary proof.
+  The Windows integration stress test now covers 10,000 files (600
+  duplicate groups) and adds a real Recycle-Bin batch-delete phase.
+
 ## [Unreleased] - Windows-only refactor
 
 Dupora is now an intentionally Windows-only application (Windows 10/11

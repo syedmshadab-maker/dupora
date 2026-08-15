@@ -154,6 +154,76 @@ void main() {
     },
   );
 
+  test('Unicode filenames and filenames with spaces are hashed and grouped '
+      'correctly, not just tolerated without crashing', () async {
+    await writeFile('  spaced name (copy).txt', 'shared content');
+    await writeFile('日本語のファイル名.txt', 'shared content');
+    await writeFile('emoji 🎉 file.txt', 'shared content');
+    await writeFile('unique.txt', 'not shared');
+
+    final engine = ScanEngine(cache: cache);
+    final result = await engine.start([tempDir.path]);
+    engine.dispose();
+
+    expect(result.finalProgress.phase, ScanPhase.completed);
+    expect(result.groups, hasLength(1));
+    expect(result.groups.single.files, hasLength(3));
+  });
+
+  test(
+    'a 100-file duplicate group is grouped correctly as a single group',
+    () async {
+      for (var i = 0; i < 100; i++) {
+        await writeFile('dup_$i.bin', 'identical payload shared by all 100');
+      }
+      await writeFile('outlier.bin', 'not part of the group');
+
+      final engine = ScanEngine(cache: cache);
+      final result = await engine.start([tempDir.path]);
+      engine.dispose();
+
+      expect(result.groups, hasLength(1));
+      expect(result.groups.single.files, hasLength(100));
+      expect(result.groups.single.duplicateCount, 99);
+    },
+  );
+
+  test('a path deep enough to approach/exceed the legacy MAX_PATH (260 char) '
+      'limit is either hashed correctly or reported as a scan error - never '
+      'a crash or a hang', () async {
+    if (!Platform.isWindows) return;
+
+    var dir = tempDir.path;
+    // Build nested directories until the path is comfortably past 260
+    // characters, the classic Windows MAX_PATH ceiling.
+    while (dir.length < 300) {
+      dir = '$dir${Platform.pathSeparator}nested_directory_segment';
+      try {
+        await Directory(dir).create();
+      } catch (_) {
+        // This filesystem/OS configuration refuses long paths outright -
+        // that's a legitimate real-world answer, not a bug in the
+        // scanner; nothing further to verify down this branch.
+        return;
+      }
+    }
+    final longPath = '$dir${Platform.pathSeparator}deep_file.txt';
+    try {
+      await File(longPath).writeAsString('content at a very deep path');
+    } catch (_) {
+      return; // same reasoning as above
+    }
+
+    final engine = ScanEngine(cache: cache);
+    final result = await engine.start([tempDir.path]);
+    engine.dispose();
+
+    // Whatever happened, it must have completed cleanly - a long path
+    // must never crash or hang the scan, whether or not it was
+    // successfully read.
+    expect(result.finalProgress.phase, ScanPhase.completed);
+  });
+
   test(
     'respects settings.scanHiddenFiles=false by default on dotfiles',
     () async {

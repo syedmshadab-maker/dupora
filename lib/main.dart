@@ -1,11 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:logging/logging.dart';
 import 'package:provider/provider.dart';
 
 import 'ui/app.dart';
 import 'ui/state/app_controller.dart';
 
 void main() {
+  _setUpLogging();
   runApp(const DuporaBootstrap());
+}
+
+/// Structured diagnostic logging for failures that are handled safely (so
+/// they never crash the app) but still need to be visible somewhere -
+/// cache recovery, scan/volume-enumeration errors, etc. Never logs file
+/// contents, only paths/messages/codes.
+void _setUpLogging() {
+  Logger.root.level = Level.ALL;
+  Logger.root.onRecord.listen((record) {
+    debugPrint(
+      '[${record.level.name}] ${record.time} ${record.loggerName}: ${record.message}',
+    );
+  });
 }
 
 /// Owns the [AppController] and waits for its async [AppController.init]

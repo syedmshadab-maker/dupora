@@ -44,10 +44,10 @@ Future<void> _pumpUntil(
   );
 }
 
-const int _totalFiles = 5000;
-const int _duplicateGroupCount = 400;
-const int _filesPerGroup = 10; // 400 * 10 = 4000 duplicate files
-// remaining 1000 files are unique
+const int _totalFiles = 10000;
+const int _duplicateGroupCount = 600;
+const int _filesPerGroup = 10; // 600 * 10 = 6000 duplicate files
+// remaining 4000 files are unique
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -161,6 +161,50 @@ void main() {
         reason:
             'a fully-cached rescan of an unchanged tree must be faster than the cold scan',
       );
+
+      // Nothing is preselected for deletion right after a scan, even at
+      // this scale - Smart Select is a distinct, explicit user action
+      // (see app_controller_test.dart for the focused regression test).
+      expect(
+        controller.selectedCount,
+        0,
+        reason: 'a completed scan must never preselect anything for deletion',
+      );
+
+      // --- Batch deletion at "hundreds of files" scale, through the real
+      // AppController/SafeDeleteCoordinator/WindowsDeleter pathway (real
+      // Recycle Bin calls, not mocked) - explicitly select one duplicate
+      // from each of 100 groups, exactly as a user reviewing results and
+      // hand-picking files (or invoking Smart Select then narrowing it
+      // down) would.
+      const deleteGroupCount = 100;
+      for (final group in result2.groups.take(deleteGroupCount)) {
+        final keep = controller.keepFileFor(group);
+        final victim = group.files.firstWhere((f) => f != keep);
+        controller.toggleFileSelected(victim, keep);
+      }
+      expect(controller.selectedCount, deleteGroupCount);
+
+      final deleteStopwatch = Stopwatch()..start();
+      final deleteResults = await controller.deleteSelected();
+      deleteStopwatch.stop();
+      final deleteSucceeded = deleteResults.where((r) => r.succeeded).length;
+      // ignore: avoid_print
+      print(
+        '[STRESS] batch delete: $deleteSucceeded/${deleteResults.length} '
+        'succeeded in ${deleteStopwatch.elapsedMilliseconds}ms '
+        '(${deleteResults.isEmpty ? 0 : (deleteStopwatch.elapsedMilliseconds / deleteResults.length).toStringAsFixed(1)}ms/file)',
+      );
+      expect(deleteResults, hasLength(deleteGroupCount));
+      expect(
+        deleteSucceeded,
+        deleteGroupCount,
+        reason:
+            'every selected duplicate in this clean synthetic dataset should '
+            'delete successfully to the Recycle Bin',
+      );
+      expect(controller.isDeleting, isFalse);
+      expect(controller.selectedCount, 0);
 
       // --- Cancellation under load: start a third scan, cancel almost
       // immediately, verify it actually stops rather than running to

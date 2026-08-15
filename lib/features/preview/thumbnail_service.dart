@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -6,6 +7,18 @@ import 'package:crypto/crypto.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+
+/// Lets a caller (typically a widget) signal it no longer needs the
+/// thumbnail it requested - e.g. its list tile scrolled out of view and was
+/// disposed before the decode finished. Cancellation is cooperative: it
+/// stops [ThumbnailService.getThumbnail] from doing further *unnecessary*
+/// work (writing to the shared memory cache, decoding when nothing will use
+/// the result) once observed, at each checkpoint after an `await`.
+class ThumbnailCancelToken {
+  bool _cancelled = false;
+  bool get isCancelled => _cancelled;
+  void cancel() => _cancelled = true;
+}
 
 enum PreviewCategory { image, video, audio, document, pdf, archive, other }
 
@@ -71,27 +84,45 @@ class ThumbnailService {
     return digest.toString();
   }
 
-  /// Returns PNG-encoded thumbnail bytes, or null if [path] isn't an image
-  /// or decoding failed (corrupt/unsupported file - never throws, so a
-  /// grid of thousands of files can't crash on one bad image).
-  Future<Uint8List?> getThumbnail(String path, DateTime modifiedAt) async {
+  /// Returns PNG-encoded thumbnail bytes, or null if [path] isn't an image,
+  /// decoding failed (corrupt/unsupported file - never throws, so a grid of
+  /// thousands of files can't crash on one bad image), or [cancelToken] was
+  /// cancelled before a result was available.
+  ///
+  /// Decoding runs on a separate isolate (via [Isolate.run]) rather than
+  /// the calling isolate, so a large/malformed image can't block whatever
+  /// isolate requested the thumbnail (in practice, the UI isolate).
+  Future<Uint8List?> getThumbnail(
+    String path,
+    DateTime modifiedAt, {
+    ThumbnailCancelToken? cancelToken,
+  }) async {
     final key = _cacheKeyFor(path, modifiedAt);
 
     final cached = _memoryCache[key];
     if (cached != null) return cached;
+    if (cancelToken?.isCancelled ?? false) return null;
 
     try {
       final cacheDir = await _cacheDir();
+      if (cancelToken?.isCancelled ?? false) return null;
+
       final cacheFile = File(p.join(cacheDir.path, '$key.png'));
       if (await cacheFile.exists()) {
         final bytes = await cacheFile.readAsBytes();
+        if (cancelToken?.isCancelled ?? false) return null;
         _storeInMemory(key, bytes);
         return bytes;
       }
 
+      if (cancelToken?.isCancelled ?? false) return null;
       final bytes = await _decode(path);
       if (bytes == null) return null;
+      // Still worth writing to the disk cache even if nobody wants this
+      // result anymore right now - it's genuinely reusable the next time
+      // this file's thumbnail is requested (e.g. scrolled back into view).
       await cacheFile.writeAsBytes(bytes);
+      if (cancelToken?.isCancelled ?? false) return null;
       _storeInMemory(key, bytes);
       return bytes;
     } catch (_) {
@@ -101,6 +132,17 @@ class ThumbnailService {
 
   Future<Uint8List?> _decode(String path) async {
     final raw = await File(path).readAsBytes();
+    try {
+      return await Isolate.run(() => _decodeAndResize(raw));
+    } catch (_) {
+      // Isolate.run rethrows anything the isolate threw; treat any decode
+      // failure (corrupt/unsupported image, OOM on a hostile file, etc.)
+      // the same as "not a usable thumbnail" rather than propagating it.
+      return null;
+    }
+  }
+
+  static Uint8List? _decodeAndResize(Uint8List raw) {
     final decoded = img.decodeImage(raw);
     if (decoded == null) return null;
     final resized = img.copyResize(
