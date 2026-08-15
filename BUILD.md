@@ -1,6 +1,9 @@
 # Build
 
-## Prerequisites (all platforms)
+**SUPPORTED PLATFORM: Windows 10/11 x64.** This is the only platform Dupora
+builds or ships for.
+
+## Prerequisites
 
 - Flutter SDK (this repo was built against Flutter 3.41.9 / Dart 3.11.5,
   stable channel).
@@ -16,8 +19,9 @@
   `lib/core/native/dupora_native_bindings.dart` probes several relative
   paths (`rust/target/release/`, `../rust/target/release/`, etc.) so
   `flutter run`/`flutter test` find the freshly built library without any
-  manual copying during development. Packaged release builds need an
-  explicit copy step per platform - see below.
+  manual copying during development. `windows/CMakeLists.txt` handles
+  bundling `dupora_engine.dll` next to the packaged release exe - see
+  below.
 
 ## Windows
 
@@ -165,222 +169,9 @@ via `Start-Process -Wait -PassThru` for reliable exit-code capture):
 
 `dist\SHA256SUMS.txt` has SHA-256 checksums (Windows PowerShell
 `Get-FileHash`, cross-checked with `sha256sum`) for the installer, the MSI,
-the portable ZIP, and the release APK.
+and the portable ZIP.
 
-## Android
-
-Requirements: Android SDK + NDK (this build used NDK 28.2.13676358),
-`rustup target add aarch64-linux-android armv7-linux-androideabi
-x86_64-linux-android`. `rust/.cargo/config.toml` in this repo points at the
-NDK's clang wrappers for linking; set `CC_aarch64_linux_android` (and the
-armv7/x86_64 equivalents) to the matching `*-clang.cmd` wrapper so `cc-rs`
-(used by `blake3`'s build script for its NEON intrinsics) can compile, e.g.:
-
-```powershell
-$env:CC_aarch64_linux_android = "$env:ANDROID_HOME\ndk\28.2.13676358\toolchains\llvm\prebuilt\windows-x86_64\bin\aarch64-linux-android30-clang.cmd"
-cd rust
-cargo build --release --target aarch64-linux-android
-cd ..
-```
-
-Copy the resulting `.so` into `android/app/src/main/jniLibs/arm64-v8a/libdupora_engine.so`
-(repeat per ABI), then:
-
-```powershell
-flutter build apk --release
-# or, for Play Store distribution:
-flutter build appbundle --release
-```
-
-minSdk is pinned to 30 (Android 11) in `android/app/build.gradle.kts` per
-the project's target-platform requirement.
-
-**Status of this build's Android verification: actually built and
-confirmed to contain the native engine.** In this session:
-
-- `cargo build --release --target aarch64-linux-android` succeeded against
-  NDK 28.2.13676358, producing a real `libdupora_engine.so`.
-- That `.so` was staged into `android/app/src/main/jniLibs/arm64-v8a/`.
-- `flutter build apk --debug` then succeeded, producing
-  `build/app/outputs/flutter-apk/app-debug.apk`. Inspecting the APK's
-  contents confirms `lib/arm64-v8a/libdupora_engine.so` is bundled inside
-  it alongside Flutter's own `libflutter.so` and `libsqlite3.so` - i.e. the
-  Kotlin (`StorageChannel.kt`, `SafChannel.kt`), Dart, and Rust pieces all
-  compile and package together correctly for a real Android target.
-- `flutter build apk --release --target-platform android-arm64` then
-  succeeded too: `build/app/outputs/flutter-apk/app-release.apk`, 23.4 MB,
-  R8-minified, confirmed (by inspecting the archive) to still contain
-  `lib/arm64-v8a/libdupora_engine.so`.
-
-**What remains unverified:** no physical Android device or running
-emulator session was used, so while both APKs are built and contain the
-correct native code, the SAF/storage `MethodChannel` code paths have not
-been exercised at *runtime* (tapping "Add Folder," picking a SAF tree,
-scanning it, etc.) - see TESTING.md.
-
-**ABI coverage:** the release APK above is `arm64-v8a` only - the ABI real
-Android phones/tablets have used since 2019 and the right default for a
-build-verification pass. `armv7-linux-androideabi` (legacy 32-bit devices)
-and `x86_64-linux-android` (emulators) cross-compile via the identical
-`.cargo/config.toml` + `CC_<target>` pattern documented above; producing a
-universal multi-ABI release is one more `cargo build --target` invocation
-per ABI plus `flutter build apk --release` (no `--target-platform` filter)
-away, not attempted for all three ABIs together in this session.
-
-## macOS
-
-```bash
-cd rust
-cargo build --release --target aarch64-apple-darwin   # Apple Silicon
-cargo build --release --target x86_64-apple-darwin    # Intel
-cd ..
-lipo -create -output rust/target/release/libdupora_engine.dylib \
-  rust/target/aarch64-apple-darwin/release/libdupora_engine.dylib \
-  rust/target/x86_64-apple-darwin/release/libdupora_engine.dylib
-flutter build macos --release
-```
-
-The lipo output must be named plain `libdupora_engine.dylib` at
-`rust/target/release/` (not e.g. `..._universal.dylib`) - that's the exact
-path `macos/Runner.xcodeproj`'s "Bundle Framework" copy-files build phase
-references when embedding it into the app bundle (see below).
-
-Not built or run on local hardware in any of this project's sessions - no
-macOS machine has ever been available here - but **fully built, bundled,
-and runtime-verified for real** on a GitHub-hosted `macos-latest`
-(Apple Silicon host, universal arm64+x86_64 build) runner, via
-`.github/workflows/release.yml`'s `build-macos` job
-(GitHub Actions run 31462917213, 2026-08-11 - passed on the first real
-attempt, unlike Linux's equivalent fix which needed three rounds of
-CI/test-tooling debugging first; the lessons from that - `flutter drive
---profile` not `flutter test --release`, and a `pumpUntil`-based wait
-instead of a single `pump()` before checking for an intermediate screen -
-were applied directly here):
-
-- **Native engine bundling**: `rust/target/release/libdupora_engine.dylib`
-  (a genuine universal binary - `lipo -create` combining
-  `aarch64-apple-darwin` and `x86_64-apple-darwin` release builds,
-  confirmed via `lipo -info` in CI: `Architectures in the fat file: ...
-  are: x86_64 arm64`) is embedded by `macos/Runner.xcodeproj`'s
-  previously-empty "Bundle Framework" `PBXCopyFilesBuildPhase`
-  (`dstSubfolderSpec = 10`, i.e. `Contents/Frameworks/`) - a
-  Flutter-template-provided phase that already existed for exactly this
-  purpose, just with nothing in it. This was the actual gap: the compiled
-  dylib existed but nothing copied it into the packaged `.app`.
-- **FFI loader**: `lib/core/native/dupora_native_bindings.dart`'s macOS
-  branch now resolves `Contents/Frameworks/libdupora_engine.dylib` via an
-  explicit, unambiguous path computed from `Platform.resolvedExecutable`'s
-  directory (`<Contents/MacOS>/../Frameworks/libdupora_engine.dylib`),
-  the same approach already used for Linux, rather than relying only on a
-  bare `dlopen("libdupora_engine.dylib")` and the dylib's own install
-  name/`@rpath` resolution. Windows, Linux, and Android loading are
-  unchanged.
-- **Runtime verification**: `integration_test/macos_native_engine_test.dart`
-  drives the actual compiled `.app` via `flutter drive --profile`
-  (`--profile`, not `--release`, because Flutter Driver hard-refuses
-  `--release` entirely on desktop platforms - see the Linux section's
-  "Automated GitHub Releases" note for the exact error text; macOS
-  runners have a real GUI session, so no `xvfb`-style headless-display
-  workaround is needed) - it calls the native engine directly first
-  (proving `DynamicLibrary.open` succeeds with no fallback needed), then
-  runs a real scan against two genuinely identical files and one
-  same-size-but-different-content file, and asserts the duplicate pair is
-  correctly found while the different-content file is correctly excluded.
-  **Actually passed**, real CI log: `Dupora native engine loaded
-  successfully. Version: 0.1.0`, then `macOS native-engine runtime
-  verification passed: engine loaded, BLAKE3 hashing executed, duplicate
-  pair correctly identified, same-size/different-content pair correctly
-  excluded`, then `All tests passed!`.
-- **Architecture**: universal (arm64 + x86_64) - both the executable and
-  the embedded dylib are genuine Mach-O universal binaries, confirmed via
-  `lipo -info`/`file` in CI, not a claim.
-- **Portable package**: CI packages the verified `.app` as
-  `Dupora-macOS-vX.Y.Z.zip` (`ditto -c -k --sequesterRsrc --keepParent
-  dupora.app ...` - the Apple-recommended way to zip a `.app` bundle,
-  preserving resource forks/metadata `zip` alone can lose). To run it:
-  unzip, then move `dupora.app` to `/Applications` (or run in place).
-  **Not code-signed or notarized** (no Apple Developer certificate
-  available in this pipeline) - macOS Gatekeeper will show an
-  unidentified-developer warning on first launch; right-click → Open
-  bypasses it. Not included in the already-published `v1.0.0` release;
-  attached automatically starting with the next tag.
-- What's still genuinely unverified: the Trash `MethodChannel`
-  (`TrashChannel.swift`) itself isn't exercised by this test (it covers
-  scan/hash/detect, not delete), and macOS `StorageManager`-equivalent
-  volume detection is untested here too - both remain real limitations,
-  not silently claimed as covered.
-
-## Linux
-
-```bash
-cd rust
-cargo build --release
-cd ..
-flutter build linux --release
-```
-
-Needs the GTK3 development headers Flutter's Linux desktop embedder
-requires (`libgtk-3-dev` and friends) on the build machine. Not built or
-run on local hardware in any of this project's sessions - no Linux
-machine has ever been available here - but **fully built, bundled, and
-runtime-verified for real** on a GitHub-hosted `ubuntu-latest` (x86_64)
-runner, via `.github/workflows/release.yml`'s `build-linux` job
-(GitHub Actions run 31461334167, 2026-08-11 - the third attempt; the
-first two runs caught and fixed real bugs in the smoke test itself, not
-the underlying fix - see the git history on this section's commits for
-the full detail of each):
-
-- **Native engine bundling**: `rust/target/release/libdupora_engine.so`
-  (built via plain `cargo build --release`, no cross-compilation needed
-  since the runner's own architecture matches the target) is installed by
-  `linux/CMakeLists.txt` into `build/linux/x64/release/bundle/lib/
-  libdupora_engine.so`, next to the plugin libraries, mirroring the exact
-  `install(FILES ...)` pattern `windows/CMakeLists.txt` already used for
-  `dupora_engine.dll`. This was the actual gap: the file existed in the
-  Rust build output but nothing copied it into the Flutter Linux bundle
-  Flutter itself produces.
-- **FFI loader**: `lib/core/native/dupora_native_bindings.dart`'s Linux
-  branch now resolves `bundle/lib/libdupora_engine.so` via an explicit,
-  unambiguous path computed from `Platform.resolvedExecutable`'s directory
-  (`<exe dir>/lib/libdupora_engine.so`), rather than relying only on a bare
-  `dlopen("libdupora_engine.so")` and the executable's `$ORIGIN/lib` RPATH
-  - which Flutter's own bundled libraries rely on safely because they're
-  linked at compile time (`target_link_libraries`), a different resolution
-  path than a pure runtime `dlopen` call from inside the Dart VM. Windows,
-  macOS, and Android loading are unchanged.
-- **Runtime verification**: `integration_test/linux_native_engine_test.dart`
-  drives the actual compiled bundle's executable via `flutter drive`
-  (`xvfb-run -a flutter drive --driver=test_driver/integration_test.dart
-  --target=integration_test/linux_native_engine_test.dart -d linux
-  --profile` - `--profile` because Flutter Driver hard-refuses `--release`
-  entirely on desktop platforms, and GitHub's runner has no display, hence
-  `xvfb-run`) - it calls the native engine directly first (proving
-  `DynamicLibrary.open` succeeds with no fallback needed), then runs a
-  real scan against two genuinely identical files and one same-size-but-
-  different-content file, and asserts the duplicate pair is correctly
-  found while the different-content file is correctly excluded - only
-  possible if the real BLAKE3 engine actually executed. **Actually passed**
-  on run 31461334167: `Dupora native engine loaded successfully. Version:
-  0.1.0` followed by `Linux native-engine runtime verification passed:
-  engine loaded, BLAKE3 hashing executed, duplicate pair correctly
-  identified, same-size/different-content pair correctly excluded` and
-  `All tests passed!` in the actual CI log. See TESTING.md for the full
-  detail.
-- **Architecture**: x86_64 only - GitHub's `ubuntu-latest` runner is
-  x86_64, and that's the only architecture built, verified, or claimed. No
-  ARM64 Linux build exists.
-- **Portable package**: CI packages the verified bundle as
-  `Dupora-Linux-x64-vX.Y.Z.tar.gz` (`tar -C build/linux/x64/release -czf
-  ... bundle`). To run it: `tar xzf Dupora-Linux-x64-vX.Y.Z.tar.gz && ./
-  bundle/dupora` - no installation, and Rust/Cargo/Flutter are not
-  required on the machine running it. Not included in the already-published
-  `v1.0.0` release; attached automatically starting with the next tag.
-- `LinuxDeleter`'s `gio trash` call and `LinuxStorageDetector`'s
-  `/proc/mounts` parsing are separately validated with unit tests against
-  synthetic input (see TESTING.md) - the runtime verification above
-  exercises scanning and hashing, not deletion.
-
-## Verifying without a full platform build
+## Verifying without a full build
 
 ```powershell
 cd rust
@@ -401,10 +192,8 @@ TESTING.md for full output).
 
 `.github/workflows/ci.yml` runs the verification block above (Rust fmt/
 clippy/test, Dart format/analyze/test) on every push to `master` and on
-every pull request, plus per-platform release-build jobs for Windows,
-Android, macOS, and Linux (which will succeed on GitHub's hosted runners,
-which have each platform's toolchain preinstalled, unlike this sandboxed
-build environment).
+every pull request, plus a Windows release-build job, all on
+`windows-latest`.
 
 ## Automated GitHub Releases
 
@@ -422,12 +211,9 @@ published); a Windows job that builds the release exe, compiles the WiX
 MSI + Burn bootstrapper installer from `installer/dupora.wxs` and
 `installer/bundle.wxs` exactly as described above, builds the portable
 ZIP, and actually silently installs, launches, and uninstalls the
-generated installer on the runner as a smoke test; and an Android job that
-cross-compiles the arm64 engine, builds a release APK, and verifies its
-contents with `aapt2` (package identity, adaptive launcher icon, native
-engine library). Once the Windows and Android jobs both succeed, a final
-job generates `SHA256SUMS.txt` and publishes a GitHub Release for the tag
-with all artifacts attached.
+generated installer on the runner as a smoke test. Once that job succeeds,
+a final job generates `SHA256SUMS.txt` and publishes a GitHub Release for
+the tag with all artifacts attached.
 
 **Version numbers are never hardcoded in the workflow.** The tag itself
 (`vX.Y.Z`) is the single source of truth; a `prepare` job parses it and
@@ -436,23 +222,13 @@ passes the result to every other job via `flutter build --build-name=...
 (for the installer), keeping the tag, the built app, and the installer
 version consistent.
 
-**What CI actually produces vs. what it doesn't:**
+**What CI actually produces:**
 
-- **All four platforms - Windows, Android, Linux, and macOS - are
-  release-gating.** A release is only published once all four succeed.
-  The Windows job's installer is genuinely install/launch/uninstall-tested;
-  the Linux and macOS jobs' bundles are genuinely runtime-tested (real
-  native-engine load, real BLAKE3 hashing, real duplicate detection) on
-  the runner itself before anything is published - not just compiled. No
-  `continue-on-error` anywhere in this set: if any of the four fails, it
-  fails honestly and the release does not happen.
-- This is not a claim that any platform's *support* is more or less real
-  than another - all four are written against their documented platform
-  APIs (see README's Known Limitations for what's genuinely still
-  unverified per platform, e.g. on-device Android testing, macOS
-  Trash/volume-detection runtime testing) - only that all four now
-  produce a *packaged, distributable* artifact that's actually been shown
-  to work, not just compile.
+- **The Windows job is release-gating.** A release is only published once
+  it succeeds. The installer is genuinely install/launch/uninstall-tested
+  on the runner itself before anything is published - not just compiled.
+  No `continue-on-error`: if the job fails, it fails honestly and the
+  release does not happen.
 - The workflow also supports manual `workflow_dispatch` runs (for testing
   the pipeline itself without cutting a release) - these compute a
   placeholder `0.0.0-dev.<run number>` version and run every job above,

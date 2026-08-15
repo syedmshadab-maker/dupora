@@ -13,9 +13,7 @@ class StorageVolume {
     this.deviceId,
   });
 
-  /// Mount root, e.g. `C:\` on Windows, `/` or `/Volumes/Backup` on macOS,
-  /// a mount point from `/proc/mounts` on Linux, or a SAF tree URI's
-  /// display root on Android.
+  /// Drive root, e.g. `C:\`.
   final String rootPath;
   final String? label;
   final VolumeType type;

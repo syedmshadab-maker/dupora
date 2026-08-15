@@ -2,6 +2,46 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased] - Windows-only refactor
+
+Dupora is now an intentionally Windows-only application (Windows 10/11
+x64). This is a scope pivot, not a regression: the Android, macOS, and
+Linux app targets added and verified in earlier releases (see the [1.1.0]
+entry below) are removed rather than left to bit-rot unmaintained.
+
+### Removed
+
+- `android/`, `macos/`, `linux/` platform directories and their
+  `branding/{android,macos,linux}/` assets.
+- Per-platform storage detectors and deleters:
+  `safe_delete_{android,linux,macos}.dart`,
+  `storage_detector_{android,linux,macos}.dart`.
+- Android Storage Access Framework (SAF) support: `saf_bridge.dart`, the
+  Kotlin `SafChannel`, and the SAF-only incremental-hashing FFI path
+  (`IncrementalHasher` in `hash_engine.dart`, the `streamHasher*` bindings,
+  and `rust/src/ffi/stream_hasher.rs`) - this path existed solely to hash
+  bytes streamed from SAF documents, which no longer applies once the
+  Android app is gone.
+- `integration_test/{linux,macos}_native_engine_test.dart`,
+  `test/features/deletion/safe_delete_linux_test.dart`,
+  `test/features/storage/data/storage_detector_linux_test.dart`.
+- `build-android`, `build-macos`, `build-linux` jobs from
+  `.github/workflows/ci.yml` and `.github/workflows/release.yml`; the
+  release workflow now only builds and publishes Windows artifacts.
+
+### Changed
+
+- `PlatformDeleter.forPlatform()`, `StorageDetector.forPlatform()`,
+  `ProtectedLocations._defaultRootsForPlatform()`, and
+  `DuporaNativeBindings._openLibrary()` now have Windows-only bodies. The
+  factory methods themselves are kept (not inlined) as a seam for a future
+  Windows-native Portable Devices/MTP implementation - removing the
+  Android *app* does not remove the intent to support Android
+  phones/tablets connected to Windows over USB. See ARCHITECTURE.md.
+- README/BUILD/TESTING/SECURITY/ARCHITECTURE/PERFORMANCE now state the
+  supported platform as Windows 10/11 x64 and no longer describe
+  cross-platform build/test/verification steps.
+
 ## [1.1.0] - 2026-08-11 - Linux and macOS release-ready
 
 Linux and macOS join Windows and Android as fully release-gating,

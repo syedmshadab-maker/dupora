@@ -45,26 +45,6 @@ typedef LogicalCpuCountDart = int Function();
 typedef _EngineVersionNative = ffi.Pointer<Utf8> Function();
 typedef EngineVersionDart = ffi.Pointer<Utf8> Function();
 
-typedef _StreamHasherNewNative = ffi.Uint64 Function();
-typedef StreamHasherNewDart = int Function();
-
-typedef _StreamHasherUpdateNative =
-    ffi.Int32 Function(
-      ffi.Uint64 handle,
-      ffi.Pointer<ffi.Uint8> ptr,
-      ffi.Size len,
-    );
-typedef StreamHasherUpdateDart =
-    int Function(int handle, ffi.Pointer<ffi.Uint8> ptr, int len);
-
-typedef _StreamHasherFinalizeNative =
-    ffi.Int32 Function(ffi.Uint64 handle, ffi.Pointer<ffi.Uint8> outHash);
-typedef StreamHasherFinalizeDart =
-    int Function(int handle, ffi.Pointer<ffi.Uint8> outHash);
-
-typedef _StreamHasherAbortNative = ffi.Int32 Function(ffi.Uint64 handle);
-typedef StreamHasherAbortDart = int Function(int handle);
-
 /// Digest length produced by BLAKE3 and by our partial fingerprint. Mirrors
 /// `rust/src/hashing/mod.rs::DIGEST_LEN`.
 const int kDigestLen = 32;
@@ -90,36 +70,12 @@ class DuporaNativeBindings {
           .lookup<ffi.NativeFunction<_EngineVersionNative>>(
             'dupora_engine_version',
           )
-          .asFunction(),
-      streamHasherNew = lib
-          .lookup<ffi.NativeFunction<_StreamHasherNewNative>>(
-            'dupora_stream_hasher_new',
-          )
-          .asFunction(),
-      streamHasherUpdate = lib
-          .lookup<ffi.NativeFunction<_StreamHasherUpdateNative>>(
-            'dupora_stream_hasher_update',
-          )
-          .asFunction(),
-      streamHasherFinalize = lib
-          .lookup<ffi.NativeFunction<_StreamHasherFinalizeNative>>(
-            'dupora_stream_hasher_finalize',
-          )
-          .asFunction(),
-      streamHasherAbort = lib
-          .lookup<ffi.NativeFunction<_StreamHasherAbortNative>>(
-            'dupora_stream_hasher_abort',
-          )
           .asFunction();
 
   final HashFileFullDart hashFileFull;
   final PartialFingerprintDart partialFingerprint;
   final LogicalCpuCountDart logicalCpuCount;
   final EngineVersionDart engineVersion;
-  final StreamHasherNewDart streamHasherNew;
-  final StreamHasherUpdateDart streamHasherUpdate;
-  final StreamHasherFinalizeDart streamHasherFinalize;
-  final StreamHasherAbortDart streamHasherAbort;
 
   static DuporaNativeBindings? _instance;
 
@@ -134,55 +90,19 @@ class DuporaNativeBindings {
 
   static ffi.DynamicLibrary _openLibrary() {
     const libraryBaseName = 'dupora_engine';
-    final candidates = <String>[];
-
-    if (Platform.isWindows) {
-      candidates.add('$libraryBaseName.dll');
-    } else if (Platform.isMacOS) {
-      final fileName = 'lib$libraryBaseName.dylib';
-      candidates.add(fileName);
-      // The release bundle embeds the engine into Contents/Frameworks/
-      // (see macos/Runner.xcodeproj's "Bundle Framework" copy-files build
-      // phase), a sibling of Contents/MacOS/ where the running executable
-      // lives. As with Linux, resolve that explicitly and unambiguously
-      // relative to the executable rather than depending on a bare
-      // dlopen(fileName) and the dylib's own install name / @rpath
-      // resolution for a plain runtime dlopen call.
-      final exeDir = File(Platform.resolvedExecutable).parent.path;
-      candidates.add('$exeDir/../Frameworks/$fileName');
-    } else if (Platform.isLinux) {
-      final fileName = 'lib$libraryBaseName.so';
-      candidates.add(fileName);
-      // The release bundle installs the engine at bundle/lib/ (see
-      // linux/CMakeLists.txt), next to bundle/dupora. Unlike Windows,
-      // where the default DLL search order always includes the
-      // executable's own directory, a bare dlopen(fileName) depends on
-      // RPATH/RUNPATH resolution semantics that aren't guaranteed for a
-      // plain runtime dlopen call made from inside the Dart VM (as opposed
-      // to a build-time-linked dependency of the executable itself, which
-      // is how the bundle's RPATH is actually exercised elsewhere). Resolve
-      // the bundle's lib/ directory explicitly, relative to the running
-      // executable, so loading doesn't depend on that ambiguity.
-      final exeDir = File(Platform.resolvedExecutable).parent.path;
-      candidates.add('$exeDir/lib/$fileName');
-    } else if (Platform.isAndroid) {
-      candidates.add('lib$libraryBaseName.so');
-    } else {
+    if (!Platform.isWindows) {
       throw UnsupportedError(
         'Dupora native engine has no build for platform: ${Platform.operatingSystem}',
       );
     }
+    final fileName = '$libraryBaseName.dll';
+    final candidates = <String>[fileName];
 
-    // On desktop, also probe common development-tree locations so `flutter
-    // run` / `flutter test` work straight from a source checkout without
-    // needing the library pre-copied next to the Flutter build output.
-    if (!Platform.isAndroid) {
-      final fileName = candidates.first;
-      final devSubpath = Platform.isWindows
-          ? 'rust\\target\\release\\$fileName'
-          : 'rust/target/release/$fileName';
-      candidates.addAll([devSubpath, '../$devSubpath', '../../$devSubpath']);
-    }
+    // Also probe common development-tree locations so `flutter run` /
+    // `flutter test` work straight from a source checkout without needing
+    // the library pre-copied next to the Flutter build output.
+    final devSubpath = 'rust\\target\\release\\$fileName';
+    candidates.addAll([devSubpath, '../$devSubpath', '../../$devSubpath']);
 
     Object? lastError;
     for (final candidate in candidates) {

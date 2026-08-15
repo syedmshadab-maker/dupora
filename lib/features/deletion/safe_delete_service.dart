@@ -2,9 +2,6 @@ import 'dart:io';
 
 import '../scanner/domain/scanned_file.dart';
 import 'protected_locations.dart';
-import 'safe_delete_android.dart';
-import 'safe_delete_linux.dart';
-import 'safe_delete_macos.dart';
 import 'safe_delete_windows.dart';
 
 enum DeleteOutcome {
@@ -39,11 +36,11 @@ abstract class PlatformDeleter {
 
   Future<void> deleteFile(String path);
 
+  /// Windows-only today. Kept as a factory (rather than constructing
+  /// [WindowsDeleter] directly at call sites) so a future portable-device
+  /// (MTP) deleter has a seam to plug into without touching callers.
   factory PlatformDeleter.forPlatform() {
     if (Platform.isWindows) return WindowsDeleter();
-    if (Platform.isMacOS) return MacOsDeleter();
-    if (Platform.isLinux) return LinuxDeleter();
-    if (Platform.isAndroid) return AndroidDeleter();
     throw UnsupportedError('No deleter for ${Platform.operatingSystem}');
   }
 }

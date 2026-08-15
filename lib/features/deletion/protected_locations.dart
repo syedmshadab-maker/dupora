@@ -45,62 +45,25 @@ class ProtectedLocations {
   }
 
   static Set<String> _defaultRootsForPlatform() {
-    if (Platform.isWindows) {
-      final systemRoot = Platform.environment['SystemRoot'] ?? r'C:\Windows';
-      final programFiles =
-          Platform.environment['ProgramFiles'] ?? r'C:\Program Files';
-      final programFilesX86 =
-          Platform.environment['ProgramFiles(x86)'] ??
-          r'C:\Program Files (x86)';
-      final programData =
-          Platform.environment['ProgramData'] ?? r'C:\ProgramData';
-      final localAppData = Platform.environment['LOCALAPPDATA'];
-      final roots = <String>{
-        systemRoot,
-        programFiles,
-        programFilesX86,
-        programData,
-        r'C:\$Recycle.Bin',
-        r'C:\System Volume Information',
-      };
-      if (localAppData != null) {
-        roots.add(p.join(localAppData, 'Dupora'));
-      }
-      return roots.map(_normalize).toSet();
+    final systemRoot = Platform.environment['SystemRoot'] ?? r'C:\Windows';
+    final programFiles =
+        Platform.environment['ProgramFiles'] ?? r'C:\Program Files';
+    final programFilesX86 =
+        Platform.environment['ProgramFiles(x86)'] ?? r'C:\Program Files (x86)';
+    final programData =
+        Platform.environment['ProgramData'] ?? r'C:\ProgramData';
+    final localAppData = Platform.environment['LOCALAPPDATA'];
+    final roots = <String>{
+      systemRoot,
+      programFiles,
+      programFilesX86,
+      programData,
+      r'C:\$Recycle.Bin',
+      r'C:\System Volume Information',
+    };
+    if (localAppData != null) {
+      roots.add(p.join(localAppData, 'Dupora'));
     }
-    if (Platform.isMacOS) {
-      return {
-        '/System',
-        '/Library',
-        '/private',
-        '/bin',
-        '/sbin',
-        '/usr',
-        '/Applications',
-      }.map(_normalize).toSet();
-    }
-    if (Platform.isLinux) {
-      return {
-        '/bin',
-        '/boot',
-        '/etc',
-        '/lib',
-        '/lib64',
-        '/proc',
-        '/sys',
-        '/sbin',
-        '/usr',
-        '/var/lib',
-      }.map(_normalize).toSet();
-    }
-    if (Platform.isAndroid) {
-      return {
-        '/system',
-        '/data/system',
-        '/data/app',
-        '/vendor',
-      }.map(_normalize).toSet();
-    }
-    return {};
+    return roots.map(_normalize).toSet();
   }
 }

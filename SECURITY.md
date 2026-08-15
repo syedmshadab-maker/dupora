@@ -1,5 +1,7 @@
 # Security
 
+**SUPPORTED PLATFORM: Windows 10/11 x64.**
+
 ## Threat model for this application
 
 Dupora reads and deletes files at the user's explicit direction. The
@@ -54,14 +56,8 @@ enforces, in order, immediately before every OS-level delete call:
    already processed in the same coordinator instance is rejected rather
    than deleted twice.
 
-Deletion uses the platform trash/recycle bin wherever one exists (Windows
-Recycle Bin via `SHFileOperationW`+`FOF_ALLOWUNDO`; macOS Trash via
-`FileManager.trashItem`; Linux via `gio trash` / the freedesktop.org Trash
-spec). Android has no SAF-level trash primitive, so its delete is
-permanent (`DocumentsContract.deleteDocument`) - the Results screen shows a
-different, more explicit warning dialog in that case
-(`lib/ui/screens/results_screen.dart::_confirmAndDelete`) rather than the
-normal "moved to Trash" copy.
+Deletion uses the Windows Recycle Bin (`SHFileOperationW` +
+`FOF_ALLOWUNDO`) - files are never permanently deleted by default.
 
 ## Untrusted filesystem input
 
@@ -100,17 +96,6 @@ Every `extern "C"` function in `rust/src/ffi/` is wrapped in
 `std::panic::catch_unwind`: a Rust panic must never unwind across the FFI
 boundary (undefined behavior). A caught panic is mapped to
 `StatusCode::Unexpected` rather than propagating.
-
-This invariant was violated (and fixed) once: `dupora_stream_hasher_new`
-and `dupora_stream_hasher_abort` (the incremental hasher used for Android
-SAF-sourced files, `rust/src/ffi/stream_hasher.rs`) were not wrapped, and
-every hasher-registry access used a plain `.lock().unwrap()`. A panic
-while any *other* handle's lock was held would poison the mutex; the very
-next call to either unwrapped function would then panic too, unwinding
-across the FFI boundary. Fixed with a poison-recovering lock helper
-(`unwrap_or_else(|poisoned| poisoned.into_inner())`) plus `catch_unwind` on
-both functions, closing the gap for real rather than narrowing its
-likelihood.
 
 Native memory passed across the boundary (cancellation flags, progress
 counters, path buffers) is always caller-allocated and caller-freed

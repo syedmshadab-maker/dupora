@@ -1,17 +1,15 @@
 # Testing
 
+**SUPPORTED PLATFORM: Windows 10/11 x64.**
+
 ## Current status
 
 ```
-cargo test                                                24 / 24 passing   (rust/)
-flutter test                                              61 / 61 passing   (test/)
+cargo test                                                21 / 21 passing   (rust/)
+flutter test                                              52 / 52 passing   (test/)
 flutter test integration_test/app_test.dart -d windows      2 / 2 passing   (real compiled exe)
 flutter test integration_test/dataset_test.dart -d windows  1 / 1 passing   (real compiled exe)
 flutter test integration_test/stress_test.dart -d windows   1 / 1 passing   (real compiled exe)
-flutter drive --target=integration_test/linux_native_engine_test.dart
-  -d linux --profile (GitHub Actions ubuntu-latest)          1 / 1 passing   (real compiled bundle)
-flutter drive --target=integration_test/macos_native_engine_test.dart
-  -d macos --profile (GitHub Actions macos-latest)            1 / 1 passing   (real compiled .app)
 flutter analyze                                              0 issues
 cargo clippy                                                   0 warnings (-D warnings)
 dart format                                                    clean
@@ -35,19 +33,6 @@ flutter test
 flutter test integration_test/app_test.dart -d windows
 flutter test integration_test/dataset_test.dart -d windows
 flutter test integration_test/stress_test.dart -d windows
-
-# Requires a Linux build environment (GTK3 dev headers) plus a display -
-# xvfb-run provides a virtual one on a headless CI runner. --profile, not
-# --release: Flutter Driver refuses to run in release mode on desktop at
-# all. See BUILD.md.
-xvfb-run -a flutter drive --driver=test_driver/integration_test.dart \
-  --target=integration_test/linux_native_engine_test.dart -d linux --profile
-
-# Requires a macOS build environment (Xcode) - a real GUI session exists
-# on GitHub's macos-latest runners, so no xvfb-equivalent is needed. Same
-# --profile reasoning as Linux. See BUILD.md.
-flutter drive --driver=test_driver/integration_test.dart \
-  --target=integration_test/macos_native_engine_test.dart -d macos --profile
 ```
 
 ## Rust (`rust/`)
@@ -66,9 +51,6 @@ flutter drive --driver=test_driver/integration_test.dart \
 - `src/ffi/mod.rs`: an FFI round-trip call matches the direct Rust call;
   a `NotFound` status surfaces correctly; invalid UTF-8 path bytes are
   rejected with `InvalidArgument` rather than causing undefined behavior.
-- `src/ffi/stream_hasher.rs`: incremental (chunked) hashing matches a
-  one-shot reference hash; a finalized handle cannot be reused; abort
-  discards a handle without panicking.
 
 ### `rust/tests/golden_vectors.rs`
 
@@ -116,14 +98,6 @@ convenience dependency.
   roots are protected; ordinary user folders are explicitly verified
   *not* protected (the spec's "don't make protection so aggressive normal
   folders can't be cleaned").
-- `test/features/deletion/safe_delete_linux_test.dart` - freedesktop.org
-  `.trashinfo` sidecar formatting (percent-encoding, zero-padded
-  timestamps), independent of a real Linux host.
-- `test/features/storage/data/storage_detector_linux_test.dart` -
-  `/proc/mounts` parsing against synthetic mount tables covering virtual
-  filesystems, `/boot/efi` exclusion, octal-escaped mount points (e.g.
-  spaces), removable-media classification, network shares, and a stat
-  failure gracefully dropping a volume rather than crashing.
 
 ### Integration tests against real infrastructure
 
@@ -260,89 +234,6 @@ holding up under load, not just in a small unit test), and verifies
 cancellation still takes effect promptly under this load. See
 PERFORMANCE.md for the actual numbers this produced.
 
-### `integration_test/linux_native_engine_test.dart` - Linux native-engine bundling verification
-
-Written specifically to verify the fix for a real bug: the Linux release
-bundle never included `libdupora_engine.so`, so the packaged app would
-have failed the first time it tried to hash anything (see BUILD.md's
-Linux section for the CMake/FFI-loader fix). Run via `flutter drive`
-(`flutter test` doesn't support `--release`/`--profile` for this
-invocation; `flutter drive` does, but hard-refuses `--release` on desktop
-entirely, hence `--profile`) against the actual compiled Linux bundle on
-GitHub Actions (`ubuntu-latest`, under `xvfb-run` since the runner has no
-display).
-
-**Actually passed on GitHub Actions run 31461334167** (2026-08-11), after
-two earlier real failures on the same underlying fix that turned out to
-be CI/test-tooling issues, not the fix itself - each diagnosed and fixed
-in its own commit rather than blindly retried:
-- Run 31439806896: `flutter test ... --release` doesn't support
-  `--release` at all for this Flutter version → switched to `flutter
-  drive` with a driver shim.
-- Run 31440776286: `flutter drive --release` is unconditionally refused
-  on desktop by Flutter Driver itself → switched to `--profile`.
-- Run 31460545295: **the native engine load already succeeded here**
-  (`Dupora native engine loaded successfully. Version: 0.1.0` in the real
-  log) - the fix was already working. The test then failed its own
-  `expect(find.byType(ScanScreen), findsOneWidget)` immediately after a
-  single `tester.pump()`, because with only 3 tiny files the scan can
-  finish faster than one pump observes on a loaded CI runner, going
-  straight to the results screen. Removed that assertion in favor of
-  `pumpUntil` waiting for the actual results screen - the thing that
-  matters, not an intermediate frame.
-- Run 31461334167: clean pass. Real log:
-  `Dupora native engine loaded successfully. Version: 0.1.0`, then
-  `Linux native-engine runtime verification passed: engine loaded, BLAKE3
-  hashing executed, duplicate pair correctly identified, same-size/
-  different-content pair correctly excluded`, then `All tests passed!`.
-
-The test itself:
-
-1. Calls `NativeHasher().engineVersion()` directly, before touching any
-   UI - if the bundled `.so` weren't found, `DuporaNativeBindings
-   ._openLibrary()` throws immediately here, with nothing downstream able
-   to mask it.
-2. Creates two genuinely identical files and one same-size-but-different-
-   content file in a fresh temp directory.
-3. Drives the real app through a real scan (`AppController.addCustomFolder`
-   + "Start Scan", same pattern as `app_test.dart`).
-4. Asserts exactly one duplicate group is found, containing exactly the
-   two identical files, and that the same-size-different-content file is
-   never classified as a duplicate of them - a result that's only
-   possible if the actual Rust BLAKE3 engine executed a real full-content
-   hash comparison, not just the Stage 1 size grouping.
-
-No mocks anywhere in this path - real dlopen, real BLAKE3, real
-filesystem, real widget tree.
-
-### `integration_test/macos_native_engine_test.dart` - macOS native-engine bundling verification
-
-Same bug, same shape of fix, same test structure as the Linux one above:
-the macOS `.app` never embedded `libdupora_engine.dylib` (see BUILD.md's
-macOS section for the Xcode-project/FFI-loader fix). Run via `flutter
-drive --profile` against the actual compiled `.app` on GitHub Actions
-(`macos-latest`) - no headless-display workaround needed, unlike Linux,
-since macOS runners have a real GUI session.
-
-**Passed on the first real CI attempt** (GitHub Actions run 31462917213,
-2026-08-11) - applying the lessons already learned fixing Linux's
-identical test (`flutter drive --profile` from the start, not `flutter
-test --release`; `pumpUntil` for the results screen instead of a single
-`pump()` before checking an intermediate screen) meant this one didn't
-need multiple rounds of CI debugging. Real log:
-`Dupora native engine loaded successfully. Version: 0.1.0`, then `macOS
-native-engine runtime verification passed: engine loaded, BLAKE3 hashing
-executed, duplicate pair correctly identified, same-size/different-content
-pair correctly excluded`, then `All tests passed!`. The build's `Verify
-the native engine is bundled` step also confirmed, via `lipo -info`, that
-both the executable and the embedded dylib are genuine universal
-(arm64 + x86_64) Mach-O binaries, not a single-architecture build.
-
-Same test steps as Linux's version: call the native engine directly first
-(no UI, proves `DynamicLibrary.open` succeeds), create the same controlled
-dataset, drive a real scan through the real widget tree, assert correct
-duplicate detection. No mocks.
-
 ## A hang bug this test suite caught
 
 `file_discovery.dart`'s `ReceivePort` never completes its own `Stream` -
@@ -403,19 +294,6 @@ racy.
 
 ## What's intentionally not covered
 
-- **Android SAF / device-channel Kotlin code** (`SafChannel.kt`,
-  `StorageChannel.kt`) has no automated test coverage in this repository:
-  Flutter's platform-channel unit-testing story requires either a running
-  device/emulator or hand-mocking `MethodChannel` responses, and this build
-  had no Android device/emulator session available (see BUILD.md). The
-  Dart-side `SafBridge` was written against the documented `MethodChannel`
-  contract but is unverified end-to-end.
-- **macOS `TrashChannel.swift`** - now confirmed to compile successfully
-  on a real `macos-latest` GitHub Actions runner (`.github/workflows/
-  release.yml`, run 31437939750, after fixing its Xcode-project
-  registration - see BUILD.md). Still not exercised at runtime: no macOS
-  host was available in any of this project's build sessions to actually
-  launch the app or invoke the Trash channel.
 - **Windows is no longer in this list.** An earlier draft of this document
   said the Windows release build and its runtime behavior were unverified;
   that's since been resolved - see BUILD.md and the integration-test

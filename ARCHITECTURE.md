@@ -1,9 +1,11 @@
 # Architecture
 
+**SUPPORTED PLATFORM: Windows 10/11 x64.**
+
 ## Overview
 
 Dupora is a Flutter (Dart) application with a Rust native engine, targeting
-Windows, macOS, Linux, and Android 11+.
+Windows 10/11 x64.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -25,7 +27,7 @@ Windows, macOS, Linux, and Android 11+.
 Rust owns exactly the performance/correctness-critical hashing path. File
 discovery, the duplicate-detection funnel's orchestration, the persistent
 cache, and all UI/state live in Dart. This keeps the FFI surface small
-(6 functions) and lets the bulk of the application be written, tested, and
+(4 functions) and lets the bulk of the application be written, tested, and
 iterated on in a single language.
 
 ## Key engineering decisions
@@ -118,47 +120,19 @@ throughput/ETA is computed from Stage 3's native progress counters (summed
 across in-flight jobs) rather than Stage 0-2, since Stage 3 is where the
 overwhelming majority of I/O time is spent for realistic workloads.
 
-### Storage detection and deletion: per-platform, unified interfaces
+### Storage detection and deletion: Windows-only, with a seam for future device support
 
-`StorageDetector` and `PlatformDeleter` are small interfaces with one
-implementation per OS (`lib/features/storage/data/storage_detector_*.dart`,
-`lib/features/deletion/safe_delete_*.dart`), selected via
-`Platform.isWindows` / etc. at construction time. Android is deliberately
-**not** behind the same `StorageDetector` interface (see `ANDROID SAF`
-below) because it has no notion of a root path the way the other three
-platforms do.
-
-## Android SAF
-
-Android 11+ scoped storage means most user storage is only reachable
-through a Storage Access Framework document tree, not a raw filesystem
-path. The architecture for this:
-
-```
-Android SAF tree URI (picked via ACTION_OPEN_DOCUMENT_TREE)
-        │  DocumentsContract.buildChildDocumentsUriUsingTree
-        ▼
-SafChannel.listChildren()  (Kotlin, android/.../SafChannel.kt)
-        │  MethodChannel
-        ▼
-SafBridge (Dart, lib/features/storage/data/saf_bridge.dart)
-        │  contentResolver.openInputStream(), read in 256KB chunks
-        ▼
-IncrementalHasher (Dart, lib/core/native/hash_engine.dart)
-        │  dupora_stream_hasher_update() per chunk
-        ▼
-Rust: handle-based incremental BLAKE3 hasher (rust/src/ffi/stream_hasher.rs)
-```
-
-This keeps the actual BLAKE3 computation in Rust (the project's requirement)
-even though the bytes originate from a `ContentResolver` stream Rust cannot
-open directly. `ScannedFile.path` holds the SAF document's `content://` URI
-string for Android-sourced scans rather than a filesystem path - there
-generally isn't one to hold.
-
-**Status:** this subsystem is code-complete against the documented SAF APIs
-but has not been exercised on a physical device or emulator as part of this
-build (see BUILD.md).
+`StorageDetector` and `PlatformDeleter` are small factory-backed interfaces
+(`lib/features/storage/data/storage_detector.dart`,
+`lib/features/deletion/safe_delete_service.dart`) with a single Windows
+implementation today (`storage_detector_windows.dart`,
+`safe_delete_windows.dart`). The factory shape (`StorageDetector
+.forPlatform()`, `PlatformDeleter.forPlatform()`) is kept deliberately,
+rather than collapsing to a direct constructor call, so a future
+Windows-native Portable Devices/MTP implementation (for Android
+phones/tablets connected over USB that don't expose a drive letter) has a
+seam to plug into without touching any call site. That feature is not
+implemented yet - see README's Known Limitations.
 
 ## Directory layout
 
@@ -168,12 +142,12 @@ lib/
     native/       dart:ffi bindings + high-level hashing wrapper
     utils/        small platform-detail helpers (file attributes)
   features/
-    storage/      volume/SAF detection (domain + per-platform data)
+    storage/      Windows volume detection (domain + data)
     scanner/      Stage 0 discovery, funnel, worker pool, ScanEngine
     duplicates/   DuplicateGroup, smart-selection strategies
     cache/        Drift schema + repository (incremental scanning)
     preview/      thumbnail generation/caching
-    deletion/     safe-delete coordinator + per-platform trash/permanent delete
+    deletion/     safe-delete coordinator + Windows Recycle Bin delete
     settings/     settings model + persistence
   ui/
     screens/      Home, Scan, Results, Settings
@@ -183,6 +157,6 @@ lib/
 rust/
   src/
     hashing/      adaptive BLAKE3 engine + partial fingerprint
-    ffi/          extern "C" surface + incremental stream hasher
+    ffi/          extern "C" surface
   tests/          golden BLAKE3 vectors + adversarial cases
 ```

@@ -1,8 +1,0 @@
-[Desktop Entry]
-Name=Dupora
-Comment=Find duplicates. Reclaim space.
-Exec=dupora
-Icon=dupora
-Terminal=false
-Type=Application
-Categories=Utility;FileTools;

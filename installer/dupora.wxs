@@ -70,16 +70,6 @@
               </Component>
             </Directory>
 
-            <Directory Id="Dir.packages" Name="packages">
-              <Directory Id="Dir.cupertino_icons" Name="cupertino_icons">
-                <Directory Id="Dir.cupertino_assets" Name="assets">
-                  <Component Id="Comp.CupertinoIcons.ttf" Guid="*">
-                    <File Id="File.CupertinoIcons.ttf" Source="$(var.ReleaseDir)\data\flutter_assets\packages\cupertino_icons\assets\CupertinoIcons.ttf" KeyPath="yes" />
-                  </Component>
-                </Directory>
-              </Directory>
-            </Directory>
-
             <Directory Id="Dir.shaders" Name="shaders">
               <Component Id="Comp.ink_sparkle.frag" Guid="*">
                 <File Id="File.ink_sparkle.frag" Source="$(var.ReleaseDir)\data\flutter_assets\shaders\ink_sparkle.frag" KeyPath="yes" />
@@ -140,7 +130,6 @@
       <ComponentRef Id="Comp.NOTICES.Z" />
       <ComponentRef Id="Comp.NativeAssetsManifest.json" />
       <ComponentRef Id="Comp.MaterialIcons_Regular_otf" />
-      <ComponentRef Id="Comp.CupertinoIcons.ttf" />
       <ComponentRef Id="Comp.ink_sparkle.frag" />
       <ComponentRef Id="Comp.stretch_effect.frag" />
       <ComponentRef Id="Comp.StartMenuShortcut" />

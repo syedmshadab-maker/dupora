@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -70,7 +68,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
-                  onPressed: () => _pickFolder(context, controller),
+                  onPressed: () => _pickFolder(controller),
                   icon: const Icon(Icons.create_new_folder_outlined),
                   label: const Text('Add Folder'),
                 ),
@@ -102,23 +100,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _pickFolder(
-    BuildContext context,
-    AppController controller,
-  ) async {
-    if (Platform.isAndroid) {
-      // Android has no raw folder-path concept; SAF tree picking is a
-      // distinct flow (see SafBridge.pickDirectory) not yet wired into this
-      // screen's UI. See KNOWN LIMITATIONS in README.md.
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Use "Add Folder" from a storage volume on Android (SAF picker).',
-          ),
-        ),
-      );
-      return;
-    }
+  Future<void> _pickFolder(AppController controller) async {
     final path = await getDirectoryPath();
     if (path != null) controller.addCustomFolder(path);
   }

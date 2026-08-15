@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 
 import '../../features/cache/hash_cache_database.dart';
@@ -64,12 +62,10 @@ class AppController extends ChangeNotifier {
     _db = await HashCacheDatabase.open();
     cacheRepo = HashCacheRepository(_db!);
 
-    if (!Platform.isAndroid) {
-      try {
-        volumes = await StorageDetector.forPlatform().listVolumes();
-      } catch (e) {
-        lastError = 'Could not enumerate storage volumes: $e';
-      }
+    try {
+      volumes = await StorageDetector.forPlatform().listVolumes();
+    } catch (e) {
+      lastError = 'Could not enumerate storage volumes: $e';
     }
     notifyListeners();
   }

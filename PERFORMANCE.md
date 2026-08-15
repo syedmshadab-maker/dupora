@@ -1,5 +1,7 @@
 # Performance
 
+**SUPPORTED PLATFORM: Windows 10/11 x64.**
+
 ## Design choices and their rationale
 
 ### Adaptive hashing strategy (`rust/src/hashing/blake3_engine.rs`)

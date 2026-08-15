@@ -100,9 +100,6 @@ identity rather than just silhouette-filling the D.
 | Platform | Format | Where |
 |---|---|---|
 | Windows | Multi-res `.ico` (16/32/48/64/128/256) | `windows/runner/resources/app_icon.ico` |
-| Android | Adaptive icon (background + foreground layers, API 26+) + legacy square PNGs per density | `android/app/src/main/res/mipmap-*/` |
-| macOS | `.iconset` folder (10 sizes, 1x/2x) → `iconutil -c icns` on a Mac | `macos/Runner/Assets.xcassets/AppIcon.appiconset/` (Xcode asset catalog, doesn't require `iconutil`) and `branding/macos/AppIcon.iconset/` (raw iconset, for `iconutil`) |
-| Linux | freedesktop.org hicolor icon theme tree (7 raster sizes + scalable SVG) + `.desktop` launcher entry | `branding/linux/hicolor/`, `branding/linux/dupora.desktop` |
 | Web/favicon | ICO + 6 PNG sizes (16/32/48/180/192/512) | `branding/favicon/` (this app has no `web/` platform target; kept as standalone deliverables) |
 
 Never resize the 1024px master down for small sizes. Below 96px, the
@@ -134,7 +131,7 @@ cd branding/scripts
 python render_icons.py            # symbol PNGs, all sizes + mono + bg cards
 python render_logo.py             # full lockups with wordmark + tagline
 python render_svgs.py             # SVG source files
-python build_platform_assets.py   # .ico / Android / macOS / Linux / favicon, integrated into the app
+python build_platform_assets.py   # .ico / favicon, integrated into the app
 ```
 
 ## File index
@@ -146,10 +143,7 @@ branding/
 ├── png/              All PNG variants (symbol sizes, mono, lockups, backgrounds)
 ├── icons/            (reserved for ad-hoc exports)
 ├── windows/          dupora.ico (also integrated into windows/runner/resources/)
-├── android/          mipmap-*/ legacy + adaptive icon layers (also integrated into android/app/.../res/)
-├── macos/            AppIcon.iconset/ (also integrated into macos/Runner/Assets.xcassets/)
 ├── favicon/          favicon.ico + 6 PNG sizes
-├── linux/            hicolor icon theme tree + dupora.desktop
 ├── scripts/           the generation pipeline (Python) + bundled Manrope font
 └── BRAND_GUIDELINES.md  this file
 ```
